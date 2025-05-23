@@ -1,0 +1,28 @@
+# Flask y extensiones
+Flask==2.3.3
+flask-cors==4.0.0
+
+# Base de datos
+PyMySQL==1.1.0
+
+# Autenticación y seguridad
+PyJWT==2.8.0
+cryptography==41.0.3
+
+# Manejo de fechas y timezone
+pytz==2023.3
+
+# Tareas programadas
+APScheduler==3.10.4
+
+# Cliente HTTP para tareas programadas
+requests==2.31.0
+
+# Variables de entorno
+python-dotenv==1.0.0
+
+# Servidor WSGI para producción
+gunicorn==21.2.0
+
+# Utilidades
+Werkzeug==2.3.7
