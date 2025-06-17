@@ -1,6 +1,6 @@
 # requirements.txt - Dependencias del proyecto
 Flask==3.0.0
-Flask-CORS==4.0.0
+Flask-CORS==6.0.0
 mysql-connector-python==8.2.0
 python-dotenv==1.0.0
 gunicorn==21.2.0
