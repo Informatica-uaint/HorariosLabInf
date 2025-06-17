@@ -25,4 +25,4 @@ python-dotenv==1.0.0
 gunicorn==21.2.0
 
 # Utilidades
-Werkzeug==2.3.7
+Werkzeug==3.0.6
