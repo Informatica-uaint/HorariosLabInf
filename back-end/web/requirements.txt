@@ -7,7 +7,7 @@ PyMySQL==1.1.0
 
 # Autenticación y seguridad
 PyJWT==2.8.0
-cryptography==41.0.3
+cryptography==44.0.1
 
 # Manejo de fechas y timezone
 pytz==2023.3
