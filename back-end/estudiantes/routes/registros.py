@@ -305,17 +305,28 @@ def format_registros(registros):
             else:
                 fecha_str = reg['fecha'].strftime('%Y-%m-%d')
             
-            # Manejar hora - SOLUCIÓN CORREGIDA
+            # Manejar hora - SOLUCIÓN CORREGIDA PARA TIMEDELTA
             hora_registro = reg['horaRegistro']
             
             if isinstance(hora_registro, str):
                 hora_str = hora_registro
             elif isinstance(hora_registro, timedelta):
-                # Convertir timedelta a string de hora
+                # Convertir timedelta a string de hora - CORRECCIÓN AQUÍ
                 total_seconds = int(hora_registro.total_seconds())
+                
+                # Manejar casos donde los segundos pueden exceder 24 horas
+                # Usar módulo para mantener en rango de 24 horas
+                total_seconds = total_seconds % 86400  # 86400 = 24 * 60 * 60
+                
                 hours = total_seconds // 3600
                 minutes = (total_seconds % 3600) // 60
                 seconds = total_seconds % 60
+                
+                # Asegurar que estén en rango válido
+                hours = max(0, min(23, hours))
+                minutes = max(0, min(59, minutes))
+                seconds = max(0, min(59, seconds))
+                
                 hora_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             elif hasattr(hora_registro, 'hour'):
                 # Si es time object
@@ -323,6 +334,7 @@ def format_registros(registros):
             else:
                 # Default para casos inesperados
                 hora_str = "00:00:00"
+                logging.warning(f"Tipo de hora inesperado: {type(hora_registro)} - {hora_registro}")
             
             # Crear timestamp simplemente concatenando strings
             timestamp_str = f"{fecha_str} {hora_str}"
@@ -331,8 +343,9 @@ def format_registros(registros):
             try:
                 fecha_hora = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
                 iso_timestamp = fecha_hora.isoformat()
-            except ValueError:
+            except ValueError as e:
                 # Si falla el parsing, usar la fecha actual como fallback
+                logging.error(f"Error parsing timestamp '{timestamp_str}': {e}")
                 iso_timestamp = datetime.now().isoformat()
             
             formatted.append({
