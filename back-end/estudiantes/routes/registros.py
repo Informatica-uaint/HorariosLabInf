@@ -298,28 +298,67 @@ def format_registros(registros):
     formatted = []
     
     for reg in registros:
-        # Crear datetime combinando fecha y hora
-        if isinstance(reg['fecha'], str):
-            fecha_obj = datetime.strptime(reg['fecha'], '%Y-%m-%d').date()
-        else:
-            fecha_obj = reg['fecha']
-        
-        if isinstance(reg['horaRegistro'], str):
-            hora_obj = datetime.strptime(reg['horaRegistro'], '%H:%M:%S').time()
-        else:
-            hora_obj = reg['horaRegistro']
-        
-        fecha_hora = datetime.combine(fecha_obj, hora_obj)
-        
-        formatted.append({
-            'id': str(reg['id']),
-            'estudianteId': str(reg['estudianteId']) if reg['estudianteId'] else '',
-            'nombreEstudiante': reg['nombreEstudiante'],
-            'apellidoEstudiante': reg['apellidoEstudiante'],
-            'rutEstudiante': reg['rutEstudiante'],
-            'tipoRegistro': reg['tipoRegistro'],
-            'horaRegistro': fecha_hora.isoformat(),
-            'fecha': fecha_obj.isoformat()
-        })
+        try:
+            # Manejar fecha
+            if isinstance(reg['fecha'], str):
+                fecha_obj = datetime.strptime(reg['fecha'], '%Y-%m-%d').date()
+            else:
+                fecha_obj = reg['fecha']
+            
+            # Manejar hora - FIXED: manejo correcto de timedelta
+            hora_registro = reg['horaRegistro']
+            
+            if isinstance(hora_registro, str):
+                # Si es string, parsear como tiempo
+                try:
+                    hora_obj = datetime.strptime(hora_registro, '%H:%M:%S').time()
+                except ValueError:
+                    try:
+                        hora_obj = datetime.strptime(hora_registro, '%H:%M').time()
+                    except ValueError:
+                        hora_obj = datetime.now().time()
+            elif isinstance(hora_registro, timedelta):
+                # Si es timedelta (duración desde medianoche) - ESTA ES LA CORRECCIÓN
+                total_seconds = int(hora_registro.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                seconds = total_seconds % 60
+                hora_obj = datetime.time(hours, minutes, seconds)
+            elif hasattr(hora_registro, 'hour'):
+                # Si ya es time object
+                hora_obj = hora_registro
+            else:
+                # Default a hora actual si no se puede procesar
+                hora_obj = datetime.now().time()
+            
+            # Combinar fecha y hora
+            fecha_hora = datetime.combine(fecha_obj, hora_obj)
+            
+            formatted.append({
+                'id': str(reg['id']),
+                'estudianteId': str(reg['estudianteId']) if reg['estudianteId'] else '',
+                'nombreEstudiante': reg['nombreEstudiante'],
+                'apellidoEstudiante': reg['apellidoEstudiante'],
+                'rutEstudiante': reg['rutEstudiante'],
+                'tipoRegistro': reg['tipoRegistro'],
+                'horaRegistro': fecha_hora.isoformat(),
+                'fecha': fecha_obj.isoformat()
+            })
+            
+        except Exception as e:
+            # Log del error y continuar con el siguiente registro
+            logging.error(f"Error formatting registro {reg.get('id', 'unknown')}: {e}")
+            
+            # Crear entrada con datos básicos si falla el formateo
+            formatted.append({
+                'id': str(reg.get('id', '')),
+                'estudianteId': str(reg.get('estudianteId', '')),
+                'nombreEstudiante': reg.get('nombreEstudiante', ''),
+                'apellidoEstudiante': reg.get('apellidoEstudiante', ''),
+                'rutEstudiante': reg.get('rutEstudiante', ''),
+                'tipoRegistro': reg.get('tipoRegistro', ''),
+                'horaRegistro': datetime.now().isoformat(),
+                'fecha': datetime.now().date().isoformat()
+            })
     
     return formatted
