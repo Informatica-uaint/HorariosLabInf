@@ -301,38 +301,36 @@ def format_registros(registros):
         try:
             # Manejar fecha
             if isinstance(reg['fecha'], str):
-                fecha_obj = datetime.strptime(reg['fecha'], '%Y-%m-%d').date()
+                fecha_str = reg['fecha']
             else:
-                fecha_obj = reg['fecha']
+                fecha_str = reg['fecha'].strftime('%Y-%m-%d')
             
-            # Manejar hora - FIXED: manejo correcto de timedelta
+            # Manejar hora - SOLUCIÓN SIMPLE SIN datetime.combine()
             hora_registro = reg['horaRegistro']
             
             if isinstance(hora_registro, str):
-                # Si es string, parsear como tiempo
-                try:
-                    hora_obj = datetime.strptime(hora_registro, '%H:%M:%S').time()
-                except ValueError:
-                    try:
-                        hora_obj = datetime.strptime(hora_registro, '%H:%M').time()
-                    except ValueError:
-                        hora_obj = datetime.now().time()
+                hora_str = hora_registro
             elif isinstance(hora_registro, timedelta):
-                # Si es timedelta (duración desde medianoche) - ESTA ES LA CORRECCIÓN
+                # Convertir timedelta a string de hora
                 total_seconds = int(hora_registro.total_seconds())
                 hours = total_seconds // 3600
                 minutes = (total_seconds % 3600) // 60
                 seconds = total_seconds % 60
-                hora_obj = datetime.time(hours, minutes, seconds)
+                hora_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             elif hasattr(hora_registro, 'hour'):
-                # Si ya es time object
-                hora_obj = hora_registro
+                # Si es time object
+                hora_str = hora_registro.strftime('%H:%M:%S')
             else:
-                # Default a hora actual si no se puede procesar
-                hora_obj = datetime.now().time()
+                # Default
+                hora_str = datetime.now().strftime('%H:%M:%S')
             
-            # Combinar fecha y hora
-            fecha_hora = datetime.combine(fecha_obj, hora_obj)
+            # Crear timestamp combinando strings en lugar de usar datetime.combine()
+            timestamp_str = f"{fecha_str} {hora_str}"
+            try:
+                fecha_hora = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                # Si falla el parsing, usar timestamp actual
+                fecha_hora = datetime.now()
             
             formatted.append({
                 'id': str(reg['id']),
@@ -342,7 +340,7 @@ def format_registros(registros):
                 'rutEstudiante': reg['rutEstudiante'],
                 'tipoRegistro': reg['tipoRegistro'],
                 'horaRegistro': fecha_hora.isoformat(),
-                'fecha': fecha_obj.isoformat()
+                'fecha': fecha_str
             })
             
         except Exception as e:
@@ -350,6 +348,7 @@ def format_registros(registros):
             logging.error(f"Error formatting registro {reg.get('id', 'unknown')}: {e}")
             
             # Crear entrada con datos básicos si falla el formateo
+            now = datetime.now()
             formatted.append({
                 'id': str(reg.get('id', '')),
                 'estudianteId': str(reg.get('estudianteId', '')),
@@ -357,8 +356,8 @@ def format_registros(registros):
                 'apellidoEstudiante': reg.get('apellidoEstudiante', ''),
                 'rutEstudiante': reg.get('rutEstudiante', ''),
                 'tipoRegistro': reg.get('tipoRegistro', ''),
-                'horaRegistro': datetime.now().isoformat(),
-                'fecha': datetime.now().date().isoformat()
+                'horaRegistro': now.isoformat(),
+                'fecha': now.date().isoformat()
             })
     
     return formatted
