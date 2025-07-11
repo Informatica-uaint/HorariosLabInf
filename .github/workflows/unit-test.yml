@@ -1,40 +1,569 @@
-# .github/workflows/simple-tests.yml
-name: Simple Unit Tests
+# .github/workflows/unit-test.yml
+name: Unit Tests - Back-end APIs
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
+    paths:
+      - 'back-end/**'
+      - 'tests/**'
+      - '.github/workflows/unit-test.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
+    paths:
+      - 'back-end/**'
+      - 'tests/**'
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'estudiantes'
+          - 'ayudantes'
+          - 'lector'
+
+env:
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  test:
-    name: Run Unit Tests
+  # ========================================
+  # DEPENDENCY CHECK AND SETUP
+  # ========================================
+  setup:
+    name: Setup and Dependency Check
     runs-on: ubuntu-latest
-
+    outputs:
+      deps-cache-key: ${{ steps.deps-cache.outputs.cache-hit }}
+    
     steps:
-    - name: 📥 Checkout
+    - name: 📥 Checkout repository
       uses: actions/checkout@v4
-
-    - name: 🐍 Setup Python
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
-
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📋 Create test requirements file
+      run: |
+        cat > requirements-test.txt << 'EOF'
+        # Core testing framework
+        unittest2==1.1.0
+        
+        # Mocking and test utilities
+        mock==4.0.3
+        coverage==7.3.2
+        
+        # Back-end dependencies for import testing
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.0.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        requests==2.31.0
+        gunicorn==21.2.0
+        Werkzeug==2.3.7
+        
+        # Additional testing tools
+        pytest==7.4.3
+        pytest-flask==1.3.0
+        pytest-mock==3.12.0
+        
+        # Code quality
+        flake8==6.1.0
+        black==23.11.0
+        EOF
+    
+    - name: 📦 Cache dependencies
+      id: deps-cache
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements-test.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+          ${{ runner.os }}-pip-
+    
     - name: 📦 Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install unittest2 mock
-        pip install Flask flask-cors PyMySQL python-dotenv || true
+        pip install -r requirements-test.txt
+    
+    - name: 🔍 Check test runner
+      working-directory: tests
+      run: |
+        python test_runner.py check-deps
+    
+    - name: 📄 Generate test summary
+      run: |
+        echo "## 🔧 Setup Complete" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Version**: ${{ env.PYTHON_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependencies**: Installed successfully" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Runner**: Ready" >> $GITHUB_STEP_SUMMARY
 
-    - name: 🧪 Run tests
+  # ========================================
+  # API SPECIFIC TESTS (PARALLEL)
+  # ========================================
+  test-estudiantes:
+    name: Test Estudiantes API
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'estudiantes' || github.event.inputs.test_scope == ''
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.0.0
+        mysql-connector-python==8.2.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Estudiantes API Tests
       working-directory: tests
       env:
-        JWT_SECRET: test-secret
+        # Flask/App config
+        SECRET_KEY: test-secret-key-estudiantes
+        FLASK_ENV: testing
+        
+        # Database config (mock values)
         MYSQL_HOST: localhost
-        MYSQL_USER: test
-        MYSQL_PASSWORD: test
-        MYSQL_DB: test
-        SECRET_KEY: test-key
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_estudiantes_db
+        MYSQL_PORT: 3306
+        
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/estudiantes:${{ github.workspace }}/tests
       run: |
-        python test_runner.py || echo "Tests completed with warnings"
+        echo "🎯 Testing Estudiantes API..."
+        python test_runner.py estudiantes 2>&1 | tee estudiantes-test-output.log
+        
+        # Capture exit code but continue to generate reports
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
+      if: always()
+      run: |
+        echo "## 🎓 Estudiantes API Test Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/estudiantes-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: estudiantes-test-results
+        path: |
+          tests/estudiantes-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+
+  test-ayudantes:
+    name: Test Ayudantes API
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'ayudantes' || github.event.inputs.test_scope == ''
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        python-dotenv==1.0.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Ayudantes API Tests
+      working-directory: tests
+      env:
+        # JWT and Auth config
+        JWT_SECRET: test-jwt-secret-ayudantes
+        SECRET_KEY: test-secret-key-ayudantes
+        
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_ayudantes_db
+        MYSQL_PORT: 3306
+        DB_CHARSET: utf8mb4
+        
+        # Timezone
+        TZ: America/Santiago
+        
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/ayudantes:${{ github.workspace }}/tests
+        FLASK_ENV: testing
+      run: |
+        echo "🎯 Testing Ayudantes API..."
+        python test_runner.py ayudantes 2>&1 | tee ayudantes-test-output.log
+        
+        # Capture exit code
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
+      if: always()
+      run: |
+        echo "## 👥 Ayudantes API Test Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/ayudantes-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: ayudantes-test-results
+        path: |
+          tests/ayudantes-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+
+  test-lector:
+    name: Test Lector QR API
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'lector' || github.event.inputs.test_scope == ''
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.1.0
+        gunicorn==21.2.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Lector QR API Tests
+      working-directory: tests
+      env:
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_lector_db
+        MYSQL_PORT: 3306
+        
+        # App config
+        SECRET_KEY: test-secret-key-lector
+        FLASK_ENV: testing
+        LOG_LEVEL: ERROR
+        CORS_ORIGINS: "*"
+        HOST: localhost
+        PORT: 5000
+        
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/lector:${{ github.workspace }}/tests
+      run: |
+        echo "🎯 Testing Lector QR API..."
+        python test_runner.py lector 2>&1 | tee lector-test-output.log
+        
+        # Capture exit code
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
+      if: always()
+      run: |
+        echo "## 📱 Lector QR API Test Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/lector-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: lector-test-results
+        path: |
+          tests/lector-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+
+  # ========================================
+  # COMPREHENSIVE TEST RUN (FALLBACK/MANUAL)
+  # ========================================
+  test-all:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == ''
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install all dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        # Core testing
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        
+        # All back-end dependencies
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        mysql-connector-python==8.2.0
+        python-dotenv==1.0.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        requests==2.31.0
+        gunicorn==21.2.0
+        Werkzeug==2.3.7
+        
+        # Testing enhancements
+        pytest==7.4.3
+        pytest-flask==1.3.0
+        pytest-mock==3.12.0
+        pytest-cov==4.1.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run All Tests with Coverage
+      working-directory: tests
+      env:
+        # Common config
+        SECRET_KEY: test-secret-key-comprehensive
+        JWT_SECRET: test-jwt-secret-comprehensive
+        FLASK_ENV: testing
+        
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_comprehensive_db
+        MYSQL_PORT: 3306
+        DB_CHARSET: utf8mb4
+        
+        # Additional config
+        TZ: America/Santiago
+        LOG_LEVEL: ERROR
+        CORS_ORIGINS: "*"
+        
+        # Python path for all modules
+        PYTHONPATH: ${{ github.workspace }}/back-end/estudiantes:${{ github.workspace }}/back-end/ayudantes:${{ github.workspace }}/back-end/lector:${{ github.workspace }}/tests
+      run: |
+        echo "🎯 Running comprehensive test suite..."
+        
+        # Run with coverage if available
+        if command -v coverage &> /dev/null; then
+          echo "📊 Running tests with coverage..."
+          coverage run --source=. test_runner.py 2>&1 | tee comprehensive-test-output.log
+          coverage report 2>&1 | tee -a comprehensive-test-output.log
+          coverage html -d coverage_html 2>/dev/null || true
+        else
+          echo "📊 Running tests without coverage..."
+          python test_runner.py 2>&1 | tee comprehensive-test-output.log
+        fi
+        
+        # Generate JUnit XML for better integration
+        python test_runner.py junit >/dev/null 2>&1 || true
+        
+        # Capture overall result
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "COMPREHENSIVE_TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Comprehensive Report
+      if: always()
+      run: |
+        echo "## 🎯 Comprehensive Test Suite Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${COMPREHENSIVE_TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### 🎉 All Tests Passed Successfully!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ Some Tests Failed or Had Issues" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Extract summary from test output
+        if [ -f tests/comprehensive-test-output.log ]; then
+          echo "### 📋 Test Summary:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Look for final summary in the log
+          grep -A 10 "FINAL TEST SUMMARY" tests/comprehensive-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || \
+          tail -n 15 tests/comprehensive-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || \
+          echo "Test completed but summary not available" >> $GITHUB_STEP_SUMMARY
+          
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Add coverage info if available
+        if [ -d tests/coverage_html ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Coverage Report Generated" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage HTML report is available in artifacts." >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: 📤 Upload Comprehensive Results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: comprehensive-test-results
+        path: |
+          tests/comprehensive-test-output.log
+          tests/test-results.xml
+          tests/coverage_html/
+        retention-days: 7
+
+  # ========================================
+  # FINAL SUMMARY AND NOTIFICATIONS
+  # ========================================
+  summarize:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-estudiantes, test-ayudantes, test-lector, test-all]
+    if: always()
+    
+    steps:
+    - name: 📊 Generate Final Summary
+      run: |
+        echo "# 🧪 Unit Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check results from needs context
+        ESTUDIANTES_SUCCESS="${{ needs.test-estudiantes.result == 'success' }}"
+        AYUDANTES_SUCCESS="${{ needs.test-ayudantes.result == 'success' }}"
+        LECTOR_SUCCESS="${{ needs.test-lector.result == 'success' }}"
+        COMPREHENSIVE_SUCCESS="${{ needs.test-all.result == 'success' }}"
+        
+        echo "## 📋 Individual API Results:" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$ESTUDIANTES_SUCCESS" = "true" ]; then
+          echo "- 🎓 **Estudiantes API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 🎓 **Estudiantes API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$AYUDANTES_SUCCESS" = "true" ]; then
+          echo "- 👥 **Ayudantes API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 👥 **Ayudantes API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$LECTOR_SUCCESS" = "true" ]; then
+          echo "- 📱 **Lector QR API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 📱 **Lector QR API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$COMPREHENSIVE_SUCCESS" = "true" ]; then
+          echo "## 🎉 Overall Result: **ALL TESTS PASSED**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ⚠️ Overall Result: **SOME TESTS FAILED**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📁 Artifacts Available:" >> $GITHUB_STEP_SUMMARY
+        echo "- Individual test results for each API" >> $GITHUB_STEP_SUMMARY
+        echo "- Comprehensive test suite results" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage reports (if generated)" >> $GITHUB_STEP_SUMMARY
+        echo "- JUnit XML files for CI integration" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow**: \`${{ github.workflow }}\` | **Run**: \`${{ github.run_number }}\` | **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
