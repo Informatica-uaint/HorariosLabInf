@@ -1,6 +1,5 @@
 // app/(tabs)/registros.tsx
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -12,8 +11,11 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    Dimensions
 } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
 const API_BASE = 'https://acceso.informaticauaint.com/api/estudiantes';
@@ -40,22 +42,13 @@ export default function RegistrosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState('hoy'); // 'hoy', 'semana', 'mes', 'personalizado'
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateFilter, setDateFilter] = useState<{
-    startDate: Date;
-    endDate: Date;
-  }>({
-    startDate: new Date(),
-    endDate: new Date()
-  });
-  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
+  const [filter, setFilter] = useState('hoy'); // 'hoy', 'semana', 'mes'
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   // Cargar datos iniciales
   useEffect(() => {
     loadRegistros();
-  }, [filter, dateFilter]);
+  }, [filter]);
 
   // Filtrar registros cuando cambia el texto de búsqueda
   useEffect(() => {
@@ -77,12 +70,6 @@ export default function RegistrosScreen() {
         endpoint = `${API_BASE}/registros_semana`;
       } else if (filter === 'mes') {
         endpoint = `${API_BASE}/registros_mes`;
-      } else if (filter === 'personalizado') {
-        // Formatear fechas YYYY-MM-DD
-        const formatDate = (date: Date) => {
-          return date.toISOString().split('T')[0];
-        };
-        endpoint = `${API_BASE}/registros_entre_fechas?inicio=${formatDate(dateFilter.startDate)}&fin=${formatDate(dateFilter.endDate)}`;
       }
     
       const response = await fetch(endpoint);
@@ -109,6 +96,7 @@ export default function RegistrosScreen() {
       setRefreshing(false);
     }
   };
+
   // Filtrar registros según búsqueda
   const filterRegistros = () => {
     if (!searchText.trim()) {
@@ -131,30 +119,6 @@ export default function RegistrosScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadRegistros();
-  };
-
-  // Formatear fecha y hora para mostrar
-  const formatDateTime = (dateTimeStr: string) => {
-    const date = new Date(dateTimeStr);
-    return date.toLocaleString('es-CL');
-  };
-
-  // Manejar cambio en el DatePicker
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      if (datePickerMode === 'start') {
-        setDateFilter(prev => ({
-          ...prev,
-          startDate: selectedDate
-        }));
-      } else {
-        setDateFilter(prev => ({
-          ...prev,
-          endDate: selectedDate
-        }));
-      }
-    }
   };
 
   // Renderizar cada item de registro
@@ -275,8 +239,6 @@ export default function RegistrosScreen() {
         return 'Esta semana';
       case 'mes':
         return 'Este mes';
-      case 'personalizado':
-        return `${dateFilter.startDate.toLocaleDateString('es-CL')} - ${dateFilter.endDate.toLocaleDateString('es-CL')}`;
       default:
         return 'Registros';
     }
@@ -377,22 +339,6 @@ export default function RegistrosScreen() {
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[styles.filterOption, filter === 'personalizado' && styles.selectedFilter]}
-              onPress={() => {
-                setFilter('personalizado');
-                setDatePickerMode('start');
-                setShowDatePicker(true);
-              }}
-            >
-              <Text style={styles.filterOptionText}>Personalizado</Text>
-              {filter === 'personalizado' && (
-                <Text style={styles.dateRangeText}>
-                  {dateFilter.startDate.toLocaleDateString('es-CL')} - {dateFilter.endDate.toLocaleDateString('es-CL')}
-                </Text>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
               style={styles.closeButton}
               onPress={() => setShowFilterModal(false)}
             >
@@ -401,43 +347,6 @@ export default function RegistrosScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={datePickerMode === 'start' ? dateFilter.startDate : dateFilter.endDate}
-          mode="date"
-          is24Hour={true}
-          display="default"
-          onChange={(event, date) => {
-            setShowDatePicker(false);
-            if (date) {
-              if (datePickerMode === 'start') {
-                setDateFilter(prev => ({ ...prev, startDate: date }));
-                // Después de seleccionar fecha inicio, mostrar selector fecha fin
-                setTimeout(() => {
-                  setDatePickerMode('end');
-                  setShowDatePicker(true);
-                }, 500);
-              } else {
-                setDateFilter(prev => ({ ...prev, endDate: date }));
-                setShowFilterModal(false);
-              }
-            } else {
-              // Si canceló, cerrar el modal
-              setShowFilterModal(false);
-            }
-          }}
-        />
-      )}
-
-      {/* Botón flotante para nuevo registro manual */}
-      <TouchableOpacity 
-        style={styles.floatingButton}
-        onPress={() => router.push('/nuevo-registro')}
-      >
-        <Ionicons name="add" size={24} color="white" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -462,7 +371,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: width > 400 ? 24 : 20,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -478,6 +387,7 @@ const styles = StyleSheet.create({
     color: 'white',
     marginHorizontal: 5,
     fontWeight: '500',
+    fontSize: 14,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -495,12 +405,14 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 12,
+    fontSize: 16,
   },
   resultCount: {
     paddingHorizontal: 20,
     marginBottom: 10,
     color: '#666',
     fontStyle: 'italic',
+    fontSize: 14,
   },
   listContainer: {
     paddingHorizontal: 15,
@@ -521,9 +433,11 @@ const styles = StyleSheet.create({
   dateText: {
     fontWeight: 'bold',
     color: '#0066CC',
+    fontSize: 16,
   },
   countText: {
     color: '#666',
+    fontSize: 14,
   },
   registroCard: {
     backgroundColor: 'white',
@@ -557,6 +471,7 @@ const styles = StyleSheet.create({
   tipoText: {
     marginLeft: 5,
     fontWeight: '500',
+    fontSize: 16,
   },
   entradaText: {
     color: '#52c41a',
@@ -576,15 +491,18 @@ const styles = StyleSheet.create({
   registroDetail: {
     color: '#666',
     marginTop: 3,
+    fontSize: 14,
   },
   loadingText: {
     marginTop: 10,
     color: '#666',
+    fontSize: 16,
   },
   errorText: {
     color: '#ff4d4f',
     textAlign: 'center',
     paddingHorizontal: 20,
+    fontSize: 16,
   },
   retryButton: {
     marginTop: 15,
@@ -596,6 +514,7 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: 'white',
     fontWeight: '500',
+    fontSize: 16,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -615,6 +534,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '80%',
+    maxWidth: 400,
     backgroundColor: 'white',
     borderRadius: 10,
     padding: 20,
@@ -645,10 +565,6 @@ const styles = StyleSheet.create({
   filterOptionText: {
     fontSize: 16,
   },
-  dateRangeText: {
-    fontSize: 12,
-    color: '#0066CC',
-  },
   closeButton: {
     marginTop: 15,
     alignItems: 'center',
@@ -659,21 +575,6 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#333',
     fontWeight: '500',
-  },
-  floatingButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0066CC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    fontSize: 16,
   },
 });

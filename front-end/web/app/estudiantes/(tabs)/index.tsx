@@ -8,13 +8,15 @@ import {
   TextInput,
   TouchableOpacity,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { StatusBar } from 'expo-status-bar';
+
+const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
 const API_BASE = Platform.OS === 'web'
@@ -231,138 +233,99 @@ export default function QRGeneratorScreen() {
     });
   };
 
-  // Copiar URL del QR
-  const copyQrData = async () => {
-    if (selectedUser) {
-      await Clipboard.setStringAsync(generateQrValue());
-      alert('Datos del QR copiados al portapapeles');
-    }
-  };
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Generador QR para Estudiantes</Text>
-      <TextInput style={styles.input} placeholder="Nombre" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Apellido" value={surname} onChangeText={setSurname} />
-      <TextInput 
-        style={styles.input} 
-        placeholder="Email institucional" 
-        value={email} 
-        onChangeText={setEmail} 
-        keyboardType="email-address" 
-        autoCapitalize="none" 
-      />
-      
-      <View style={styles.optionsRow}>
-        <TouchableOpacity 
-          style={styles.generateButton} 
-          onPress={saveUser}
-        >
-          <Text style={styles.generateButtonText}>Generar QR</Text>
-        </TouchableOpacity>
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Generador QR para Estudiantes</Text>
+        <TextInput style={styles.input} placeholder="Nombre" value={name} onChangeText={setName} />
+        <TextInput style={styles.input} placeholder="Apellido" value={surname} onChangeText={setSurname} />
+        <TextInput 
+          style={styles.input} 
+          placeholder="Email institucional" 
+          value={email} 
+          onChangeText={setEmail} 
+          keyboardType="email-address" 
+          autoCapitalize="none" 
+        />
         
-        <TouchableOpacity 
-          onPress={toggleAutoRenewal} 
-          style={[styles.checkboxContainer, autoRenewal && styles.checkboxChecked]}
-        >
-          <Text style={styles.checkboxText}>Auto-renovar QR</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.optionsRow}>
+          <TouchableOpacity 
+            style={styles.generateButton} 
+            onPress={saveUser}
+          >
+            <Text style={styles.generateButtonText}>Generar QR</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={toggleAutoRenewal} 
+            style={[styles.checkboxContainer, autoRenewal && styles.checkboxChecked]}
+          >
+            <Text style={styles.checkboxText}>Auto-renovar QR</Text>
+          </TouchableOpacity>
+        </View>
 
-      {savedUsers.length > 0 && (
-        <ScrollView horizontal style={styles.userList}>
-          {savedUsers.map((user, idx) => (
-            <TouchableOpacity 
-              key={idx} 
-              style={styles.userItem}
-              onPress={() => selectSavedUser(user)}
-            >
-              <Text style={styles.userItemText}>{user.name} {user.surname}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
-
-      {selectedUser && (
-        <View style={styles.qrContainer}>
-          <Text style={[
-            styles.userText, 
-            (qrExpired && !autoRenewal) ? styles.expiredText : styles.validText
-          ]}>
-            {(qrExpired && !autoRenewal) 
-              ? 'QR Expirado' 
-              : `${selectedUser.name} ${selectedUser.surname} - ${selectedUser.email}`
-            }
-          </Text>
-          
-          <QRCode
-            value={generateQrValue()}
-            size={200}
-            backgroundColor="white"
-            color={(qrExpired && !autoRenewal) ? "#cccccc" : "black"}
-          />
-          
-          <View style={styles.userInfoContainer}>
-            <Text style={styles.userInfoText}>
-              <Text style={styles.infoLabel}>Nombre: </Text>
-              {selectedUser.name} {selectedUser.surname}
-            </Text>
-            <Text style={styles.userInfoText}>
-              <Text style={styles.infoLabel}>Email: </Text>
-              {selectedUser.email}
-            </Text>
-            <Text style={styles.userInfoText}>
-              <Text style={styles.infoLabel}>Tipo: </Text>
-              <Text style={styles.tipoText}>ESTUDIANTE</Text>
-            </Text>
-          </View>
-          
-          {autoRenewal && (
-            <Text style={styles.renewalText}>QR con renovación automática activa</Text>
-          )}
-          
-          {!autoRenewal && !qrExpired && (
-            <Text style={styles.expirationText}>
-              Este QR expirará en 15 segundos
-            </Text>
-          )}
-          
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={copyQrData}>
-              <Ionicons name="copy-outline" size={20} color="#1890ff" />
-              <Text style={styles.actionButtonText}>Copiar datos</Text>
-            </TouchableOpacity>
-            
-            {(qrExpired && !autoRenewal) && (
+        {savedUsers.length > 0 && (
+          <ScrollView horizontal style={styles.userList} showsHorizontalScrollIndicator={false}>
+            {savedUsers.map((user, idx) => (
               <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={() => {
-                  const newTimestamp = Date.now();
-                  setSelectedUser(prevUser => ({
-                    ...prevUser,
-                    timestamp: newTimestamp,
-                    expired: false
-                  }));
-                  setQrExpired(false);
-                  
-                  setTimeout(() => {
-                    setQrExpired(true);
-                    setSelectedUser(prevUser => ({
-                      ...prevUser,
-                      expired: true
-                    }));
-                  }, 15000);
-                }}
+                key={idx} 
+                style={styles.userItem}
+                onPress={() => selectSavedUser(user)}
               >
-                <Ionicons name="refresh" size={20} color="#1890ff" />
-                <Text style={styles.actionButtonText}>Renovar</Text>
+                <Text style={styles.userItemText}>{user.name} {user.surname}</Text>
               </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {selectedUser && (
+          <View style={styles.qrContainer}>
+            <Text style={[
+              styles.userText, 
+              (qrExpired && !autoRenewal) ? styles.expiredText : styles.validText
+            ]}>
+              {(qrExpired && !autoRenewal) 
+                ? 'QR Expirado' 
+                : `${selectedUser.name} ${selectedUser.surname} - ${selectedUser.email}`
+              }
+            </Text>
+            
+            <QRCode
+              value={generateQrValue()}
+              size={width > 400 ? 200 : width * 0.5}
+              backgroundColor="white"
+              color={(qrExpired && !autoRenewal) ? "#cccccc" : "black"}
+            />
+            
+            <View style={styles.userInfoContainer}>
+              <Text style={styles.userInfoText}>
+                <Text style={styles.infoLabel}>Nombre: </Text>
+                {selectedUser.name} {selectedUser.surname}
+              </Text>
+              <Text style={styles.userInfoText}>
+                <Text style={styles.infoLabel}>Email: </Text>
+                {selectedUser.email}
+              </Text>
+              <Text style={styles.userInfoText}>
+                <Text style={styles.infoLabel}>Tipo: </Text>
+                <Text style={styles.tipoText}>ESTUDIANTE</Text>
+              </Text>
+            </View>
+            
+            {autoRenewal && (
+              <Text style={styles.renewalText}>QR con renovación automática activa</Text>
+            )}
+            
+            {!autoRenewal && !qrExpired && (
+              <Text style={styles.expirationText}>
+                Este QR expirará en 15 segundos
+              </Text>
             )}
           </View>
-        </View>
-      )}
+        )}
+      </View>
       <StatusBar style="auto" />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -370,10 +333,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  content: {
     padding: 20,
+    paddingBottom: 40,
   },
   title: {
-    fontSize: 22,
+    fontSize: width > 400 ? 22 : 18,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
@@ -386,31 +352,38 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 10,
     backgroundColor: 'white',
+    fontSize: 16,
   },
   optionsRow: {
-    flexDirection: 'row',
+    flexDirection: width > 600 ? 'row' : 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 15,
+    gap: 10,
   },
   generateButton: {
     backgroundColor: '#0066CC',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 5,
+    minWidth: width > 600 ? 'auto' : '100%',
+    alignItems: 'center',
   },
   generateButtonText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 5,
     backgroundColor: 'white',
+    minWidth: width > 600 ? 'auto' : '100%',
+    justifyContent: 'center',
   },
   checkboxChecked: {
     backgroundColor: '#e6f7ff',
@@ -418,19 +391,23 @@ const styles = StyleSheet.create({
   },
   checkboxText: {
     marginLeft: 5,
+    fontSize: 16,
   },
   userList: {
-    maxHeight: 50,
+    maxHeight: 60,
     marginVertical: 10,
   },
   userItem: {
-    padding: 10,
+    padding: 12,
     marginRight: 10,
     backgroundColor: '#e6f7ff',
     borderRadius: 5,
+    minWidth: 120,
   },
   userItemText: {
     color: '#1890ff',
+    textAlign: 'center',
+    fontSize: 14,
   },
   qrContainer: {
     alignItems: 'center',
@@ -459,12 +436,13 @@ const styles = StyleSheet.create({
   userInfoContainer: {
     marginTop: 15,
     backgroundColor: '#f9f9f9',
-    padding: 10,
+    padding: 15,
     borderRadius: 5,
     width: '100%',
   },
   userInfoText: {
-    marginBottom: 5,
+    marginBottom: 8,
+    fontSize: 14,
   },
   infoLabel: {
     fontWeight: 'bold',
@@ -474,30 +452,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   renewalText: {
-    marginTop: 10,
+    marginTop: 15,
     color: '#1890ff',
     fontStyle: 'italic',
+    textAlign: 'center',
   },
   expirationText: {
-    marginTop: 10,
+    marginTop: 15,
     color: '#999',
     fontStyle: 'italic',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginTop: 15,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f8ff',
-    padding: 8,
-    borderRadius: 5,
-  },
-  actionButtonText: {
-    color: '#1890ff',
-    marginLeft: 5,
+    textAlign: 'center',
   },
 });

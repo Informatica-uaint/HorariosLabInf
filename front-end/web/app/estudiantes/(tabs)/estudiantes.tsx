@@ -11,8 +11,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Dimensions
 } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
 const API_BASE = 'https://acceso.informaticauaint.com/api/estudiantes';
@@ -137,8 +140,6 @@ export default function EstudiantesScreen() {
           />
         </View>
         
-        <Text style={styles.studentDetail}>RUT: {item.rut}</Text>
-        <Text style={styles.studentDetail}>Carrera: {item.carrera}</Text>
         <Text style={styles.studentDetail}>Email: {item.email}</Text>
       </TouchableOpacity>
     );
@@ -219,13 +220,6 @@ export default function EstudiantesScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Estudiantes</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => router.push('/nuevo-estudiante')}
-        >
-          <Ionicons name="add-circle" size={24} color="white" />
-          <Text style={styles.addButtonText}>Nuevo</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Barra de búsqueda */}
@@ -233,7 +227,7 @@ export default function EstudiantesScreen() {
         <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Buscar por nombre, RUT o carrera..."
+          placeholder="Buscar por nombre o email..."
           value={searchText}
           onChangeText={setSearchText}
         />
@@ -304,29 +298,16 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: width > 400 ? 24 : 20,
     fontWeight: 'bold',
     color: '#333',
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0066CC',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  addButtonText: {
-    color: 'white',
-    marginLeft: 5,
-    fontWeight: '500',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -344,17 +325,20 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 12,
+    fontSize: 16,
   },
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: 10,
     marginBottom: 10,
+    flexWrap: 'wrap',
   },
   filterButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 10,
+    marginBottom: 5,
     backgroundColor: '#f0f0f0',
   },
   activeFilter: {
@@ -363,6 +347,7 @@ const styles = StyleSheet.create({
   filterText: {
     fontWeight: '500',
     color: '#666',
+    fontSize: 14,
   },
   activeFilterText: {
     color: 'white',
@@ -372,6 +357,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#666',
     fontStyle: 'italic',
+    fontSize: 14,
   },
   listContainer: {
     paddingHorizontal: 15,
@@ -402,14 +388,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: width > 500 ? 'row' : 'column',
+    alignItems: width > 500 ? 'center' : 'flex-start',
     flex: 1,
   },
   studentName: {
-    fontSize: 18,
+    fontSize: width > 400 ? 18 : 16,
     fontWeight: 'bold',
-    marginRight: 8,
+    marginRight: width > 500 ? 8 : 0,
+    marginBottom: width > 500 ? 0 : 4,
   },
   presenteBadge: {
     backgroundColor: '#e6f7ff',
@@ -425,15 +412,18 @@ const styles = StyleSheet.create({
   studentDetail: {
     color: '#666',
     marginTop: 3,
+    fontSize: 14,
   },
   loadingText: {
     marginTop: 10,
     color: '#666',
+    fontSize: 16,
   },
   errorText: {
     color: '#ff4d4f',
     textAlign: 'center',
     paddingHorizontal: 20,
+    fontSize: 16,
   },
   retryButton: {
     marginTop: 15,
@@ -445,6 +435,7 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: 'white',
     fontWeight: '500',
+    fontSize: 16,
   },
   emptyContainer: {
     alignItems: 'center',
