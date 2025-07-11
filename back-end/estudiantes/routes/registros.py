@@ -1,4 +1,4 @@
-# routes/registros.py - Rutas para manejo de registros
+# routes/registros.py - Rutas para manejo de registros (VERSIÓN CORREGIDA)
 from flask import Blueprint, request, jsonify
 from config.database import execute_query
 from utils.helpers import format_response, handle_error
@@ -305,10 +305,11 @@ def format_registros(registros):
             else:
                 fecha_str = reg['fecha'].strftime('%Y-%m-%d')
             
-            # Manejar hora - SOLUCIÓN CORREGIDA
+            # Manejar hora - SOLUCIÓN PARA TIMEDELTA
             hora_registro = reg['horaRegistro']
             
             if isinstance(hora_registro, str):
+                # Si ya es string, usarlo directamente
                 hora_str = hora_registro
             elif isinstance(hora_registro, timedelta):
                 # Convertir timedelta a string de hora
@@ -317,21 +318,23 @@ def format_registros(registros):
                 minutes = (total_seconds % 3600) // 60
                 seconds = total_seconds % 60
                 hora_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-            elif hasattr(hora_registro, 'hour'):
-                # Si es time object
+            elif hasattr(hora_registro, 'strftime'):
+                # Si es un objeto time o datetime
                 hora_str = hora_registro.strftime('%H:%M:%S')
             else:
                 # Default para casos inesperados
+                logging.warning(f"Tipo de hora inesperado: {type(hora_registro)} - {hora_registro}")
                 hora_str = "00:00:00"
             
-            # Crear timestamp simplemente concatenando strings
+            # Crear timestamp combinando fecha y hora
             timestamp_str = f"{fecha_str} {hora_str}"
             
             # Convertir a datetime para generar ISO format
             try:
                 fecha_hora = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
                 iso_timestamp = fecha_hora.isoformat()
-            except ValueError:
+            except ValueError as e:
+                logging.error(f"Error al parsear timestamp: {timestamp_str} - {e}")
                 # Si falla el parsing, usar la fecha actual como fallback
                 iso_timestamp = datetime.now().isoformat()
             
@@ -347,8 +350,10 @@ def format_registros(registros):
             })
             
         except Exception as e:
-            # Log del error y continuar con el siguiente registro
+            # Log detallado del error
             logging.error(f"Error formatting registro {reg.get('id', 'unknown')}: {e}")
+            logging.error(f"Registro completo: {reg}")
+            logging.error(f"Tipo de horaRegistro: {type(reg.get('horaRegistro'))}")
             
             # Crear entrada con datos básicos si falla el formateo
             now = datetime.now()
