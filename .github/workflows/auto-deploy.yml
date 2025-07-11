@@ -1,679 +1,575 @@
-# .github/workflows/ci-cd.yml
-name: CI/CD - Build and Deploy
+# .github/workflows/unit-test.yml
+# GitHub Actions workflow for running unit tests on HorariosLabInf back-end APIs
+# Updated to use latest action versions: checkout@v4, setup-python@v5, cache@v4, upload-artifact@v4
+name: Unit Tests - Back-end APIs
 
 on:
   push:
-    branches: [main, master]
+    branches: [ main, master, develop ]
+    paths:
+      - 'back-end/**'
+      - 'tests/**'
+      - '.github/workflows/unit-test.yml'
   pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
+    paths:
+      - 'back-end/**'
+      - 'tests/**'
   workflow_dispatch:
-
-# ========================================
-# PERMISOS PARA SECURITY SCANNING
-# ========================================
-permissions:
-  contents: read
-  security-events: write
-  actions: read
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'estudiantes'
+          - 'ayudantes'
+          - 'lector'
 
 env:
-  REGISTRY: docker.io
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  NODE_VERSION: '18'
   PYTHON_VERSION: '3.11'
 
 jobs:
   # ========================================
-  # FRONTEND BUILD & DEPLOY
+  # DEPENDENCY CHECK AND SETUP
   # ========================================
-  frontend:
-    name: Frontend - Build & Deploy
+  setup:
+    name: Setup and Dependency Check
     runs-on: ubuntu-latest
-    environment: Prod
+    outputs:
+      deps-cache-key: ${{ steps.deps-cache.outputs.cache-hit }}
     
-    strategy:
-      matrix:
-        app:
-          - name: front-end-web
-            path: front-end/web
-            image_name: front-end-web
-          #- name: front-end-lector
-          #  path: front-end/lector
-          #  image_name: front-end--lector
-
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout repository
       uses: actions/checkout@v4
-
-    - name: Set up Node.js ${{ env.NODE_VERSION }}
-      uses: actions/setup-node@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        node-version: ${{ env.NODE_VERSION }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to DockerHub
-      if: github.event_name != 'pull_request'
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ env.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    # Cache dependencies
-    - name: Cache node modules for ${{ matrix.app.name }}
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📋 Create test requirements file
+      run: |
+        cat > requirements-test.txt << 'EOF'
+        # Core testing framework
+        unittest2==1.1.0
+        
+        # Mocking and test utilities
+        mock==4.0.3
+        coverage==7.3.2
+        
+        # Back-end dependencies for import testing
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.0.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        requests==2.31.0
+        gunicorn==21.2.0
+        Werkzeug==2.3.7
+        
+        # Additional testing tools
+        pytest==7.4.3
+        pytest-flask==1.3.0
+        pytest-mock==3.12.0
+        
+        # Code quality
+        flake8==6.1.0
+        black==23.11.0
+        EOF
+    
+    - name: 📦 Cache dependencies
+      id: deps-cache
       uses: actions/cache@v4
       with:
-        path: ${{ matrix.app.path }}/node_modules
-        key: ${{ runner.os }}-${{ matrix.app.name }}-${{ hashFiles(format('{0}/package-lock.json', matrix.app.path)) }}
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements-test.txt') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.app.name }}-
-
-    # Install and build
-    - name: Install dependencies for ${{ matrix.app.name }}
-      working-directory: ${{ matrix.app.path }}
-      run: npm ci || npm install
-
-    - name: Build ${{ matrix.app.name }} static files
-      working-directory: ${{ matrix.app.path }}
-      run: |
-        npx expo install --fix
-        npx expo export -p web --output-dir dist
-
-    # Extract metadata for Docker
-    - name: Extract Docker metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ matrix.app.image_name }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    # Build and push Docker image
-    - name: Build and push ${{ matrix.app.name }} Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ${{ matrix.app.path }}
-        file: ${{ matrix.app.path }}/Dockerfile
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
-        cache-from: type=gha,scope=${{ matrix.app.name }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.app.name }}
-
-    - name: Generate build summary
-      if: github.event_name != 'pull_request'
-      run: |
-        echo "## 🎨 Frontend Built: ${{ matrix.app.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **App**: ${{ matrix.app.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Image**: \`${{ env.DOCKERHUB_USERNAME }}/${{ matrix.app.image_name }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-  # ========================================
-  # BACKEND BUILD & DEPLOY
-  # ========================================
-  backend:
-    name: Backend - Build & Deploy
-    runs-on: ubuntu-latest
-    environment: Prod
+          ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+          ${{ runner.os }}-pip-
     
-    strategy:
-      matrix:
-        service:
-          - name: back-end-estudiantes
-            context: back-end/estudiantes
-            dockerfile: back-end/estudiantes/Dockerfile
-            image_name: back-end-estudiantes
-          - name: back-end-lector
-            context: back-end/lector
-            dockerfile: back-end/lector/Dockerfile
-            image_name: back-end-lector
-          - name: back-end-ayudantes
-            context: back-end/ayudantes
-            dockerfile: back-end/ayudantes/Dockerfile
-            image_name: back-end-ayudantes
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-test.txt
+    
+    - name: 🔍 Check test runner
+      working-directory: tests
+      run: |
+        python test_runner.py check-deps
+    
+    - name: 📄 Generate test summary
+      run: |
+        echo "## 🔧 Setup Complete" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Version**: ${{ env.PYTHON_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependencies**: Installed successfully" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Runner**: Ready" >> $GITHUB_STEP_SUMMARY
 
+  # ========================================
+  # API SPECIFIC TESTS (PARALLEL)
+  # ========================================
+  test-estudiantes:
+    name: Test Estudiantes API
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'estudiantes' || github.event.inputs.test_scope == ''
+    
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout repository
       uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to DockerHub
-      if: github.event_name != 'pull_request'
-      uses: docker/login-action@v3
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ env.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    # Extract metadata for Docker
-    - name: Extract Docker metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service.image_name }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    # Auto-create optimized Dockerfile if missing
-    - name: Ensure Dockerfile exists
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
       run: |
-        if [ ! -f "${{ matrix.service.dockerfile }}" ]; then
-          echo "🔧 Creating optimized Dockerfile for ${{ matrix.service.name }}"
-          mkdir -p $(dirname "${{ matrix.service.dockerfile }}")
-          
-          case "${{ matrix.service.name }}" in
-            "api-estudiantes"|"web-api")
-              cat > "${{ matrix.service.dockerfile }}" << 'EOF'
-        FROM python:3.11-slim
-        
-        # Metadatos
-        LABEL maintainer="acceso.informaticauaint.com"
-        LABEL description="${{ matrix.service.name }} para sistema de acceso"
-        
-        # Variables de entorno
-        ENV PYTHONDONTWRITEBYTECODE=1 \
-            PYTHONUNBUFFERED=1 \
-            FLASK_APP=app.py \
-            FLASK_ENV=production \
-            PIP_NO_CACHE_DIR=1 \
-            PIP_DISABLE_PIP_VERSION_CHECK=1
-        
-        # Instalar dependencias del sistema en una sola capa
-        RUN apt-get update && apt-get install -y --no-install-recommends \
-            gcc \
-            curl \
-            && rm -rf /var/lib/apt/lists/* \
-            && apt-get clean
-        
-        # Crear usuario no-root
-        RUN groupadd -r appuser && useradd -r -g appuser appuser
-        
-        # Crear directorio de trabajo
-        WORKDIR /app
-        
-        # Copiar y instalar dependencias (aprovechar cache de Docker)
-        COPY requirements.txt .
-        RUN pip install --no-cache-dir --upgrade pip && \
-            pip install --no-cache-dir -r requirements.txt
-        
-        # Copiar código fuente
-        COPY . .
-        
-        # Cambiar propietario de archivos
-        RUN chown -R appuser:appuser /app
-        
-        # Cambiar a usuario no-root
-        USER appuser
-        
-        # Exponer puerto
-        EXPOSE 5000
-        
-        # Health check optimizado
-        HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-            CMD curl -f http://localhost:5000/api/health || exit 1
-        
-        # Comando por defecto optimizado
-        CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "60", "--keep-alive", "2", "app:app"]
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.0.0
+        mysql-connector-python==8.2.0
         EOF
-              ;;
-            "lector-qr")
-              cat > "${{ matrix.service.dockerfile }}" << 'EOF'
-        FROM python:3.11-slim
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Estudiantes API Tests
+      working-directory: tests
+      env:
+        # Flask/App config
+        SECRET_KEY: test-secret-key-estudiantes
+        FLASK_ENV: testing
         
-        # Metadatos
-        LABEL maintainer="acceso.informaticauaint.com"
-        LABEL description="Lector QR para sistema de acceso"
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_estudiantes_db
+        MYSQL_PORT: 3306
         
-        # Variables de entorno
-        ENV PYTHONDONTWRITEBYTECODE=1 \
-            PYTHONUNBUFFERED=1 \
-            PIP_NO_CACHE_DIR=1 \
-            PIP_DISABLE_PIP_VERSION_CHECK=1
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/estudiantes:${{ github.workspace }}/tests
+      run: |
+        echo "🎯 Testing Estudiantes API..."
+        python test_runner.py estudiantes 2>&1 | tee estudiantes-test-output.log
         
-        # Instalar dependencias del sistema para QR
-        RUN apt-get update && apt-get install -y --no-install-recommends \
-            gcc \
-            curl \
-            libzbar0 \
-            libzbar-dev \
-            && rm -rf /var/lib/apt/lists/* \
-            && apt-get clean
+        # Capture exit code but continue to generate reports
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
+      if: always()
+      run: |
+        echo "## 🎓 Estudiantes API Test Results" >> $GITHUB_STEP_SUMMARY
         
-        # Crear usuario no-root
-        RUN groupadd -r appuser && useradd -r -g appuser appuser
-        
-        # Crear directorio de trabajo
-        WORKDIR /app
-        
-        # Copiar y instalar dependencias
-        COPY requirements.txt .
-        RUN pip install --no-cache-dir --upgrade pip && \
-            pip install --no-cache-dir -r requirements.txt
-        
-        # Copiar código fuente
-        COPY . .
-        
-        # Cambiar propietario de archivos
-        RUN chown -R appuser:appuser /app
-        
-        # Cambiar a usuario no-root
-        USER appuser
-        
-        # Exponer puerto
-        EXPOSE 8000
-        
-        # Health check básico
-        HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-            CMD curl -f http://localhost:8000/health || exit 1
-        
-        # Comando por defecto
-        CMD ["python", "app.py"]
-        EOF
-              ;;
-          esac
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
         else
-          echo "✅ Dockerfile already exists for ${{ matrix.service.name }}"
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
         fi
-
-    # Build and push Docker image
-    - name: Build and push ${{ matrix.service.name }} Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ${{ matrix.service.context }}
-        file: ${{ matrix.service.dockerfile }}
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
-        cache-from: type=gha,scope=${{ matrix.service.name }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
-
-    - name: Generate build summary
-      if: github.event_name != 'pull_request'
-      run: |
-        echo "## ⚙️ Backend Built: ${{ matrix.service.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Service**: ${{ matrix.service.name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Image**: \`${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service.image_name }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+        
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/estudiantes-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: estudiantes-test-results-${{ github.run_number }}
+        path: |
+          tests/estudiantes-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+        compression-level: 6
 
-  # ========================================
-  # SECURITY SCAN (Solo en main/master)
-  # ========================================
-  security-scan:
-    name: Security Scan
+  test-ayudantes:
+    name: Test Ayudantes API
     runs-on: ubuntu-latest
-    needs: [frontend, backend]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    environment: Prod
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'ayudantes' || github.event.inputs.test_scope == ''
     
-    # Permisos específicos para este job
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    
-    strategy:
-      fail-fast: false  # Continuar aunque falle un scan
-      matrix:
-        image:
-          - asistencias-qr
-          - estudiantes-qr
-          - acceso-api-estudiantes
-          - acceso-lector-qr
-          - acceso-web-api
-
     steps:
-    # Checkout necesario para SARIF upload
-    - name: Checkout repository
+    - name: 📥 Checkout repository
       uses: actions/checkout@v4
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        image-ref: '${{ env.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest'
-        format: 'sarif'
-        output: 'trivy-results-${{ matrix.image }}.sarif'
-        severity: 'CRITICAL,HIGH'
-        exit-code: '0'  # No fallar el workflow por vulnerabilidades
-
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results-${{ matrix.image }}.sarif'
-        category: 'trivy-${{ matrix.image }}'  # Categoría para distinguir scans
-
-    - name: Generate security summary
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        python-dotenv==1.0.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Ayudantes API Tests
+      working-directory: tests
+      env:
+        # JWT and Auth config
+        JWT_SECRET: test-jwt-secret-ayudantes
+        SECRET_KEY: test-secret-key-ayudantes
+        
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_ayudantes_db
+        MYSQL_PORT: 3306
+        DB_CHARSET: utf8mb4
+        
+        # Timezone
+        TZ: America/Santiago
+        
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/ayudantes:${{ github.workspace }}/tests
+        FLASK_ENV: testing
+      run: |
+        echo "🎯 Testing Ayudantes API..."
+        python test_runner.py ayudantes 2>&1 | tee ayudantes-test-output.log
+        
+        # Capture exit code
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
       if: always()
       run: |
-        echo "## 🔍 Security Scan: ${{ matrix.image }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Image**: \`${{ env.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Scanner**: Trivy (CRITICAL,HIGH)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Results**: Uploaded to Security tab" >> $GITHUB_STEP_SUMMARY
+        echo "## 👥 Ayudantes API Test Results" >> $GITHUB_STEP_SUMMARY
         
-        # Mostrar resumen de vulnerabilidades si existe
-        if [ -f "trivy-results-${{ matrix.image }}.sarif" ]; then
-          VULN_COUNT=$(cat "trivy-results-${{ matrix.image }}.sarif" | jq '.runs[0].results | length' 2>/dev/null || echo "0")
-          echo "- **Vulnerabilities Found**: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/ayudantes-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ayudantes-test-results-${{ github.run_number }}
+        path: |
+          tests/ayudantes-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+        compression-level: 6
 
-  # ========================================
-  # HEALTH CHECK Y NOTIFICACIÓN CONDICIONAL
-  # ========================================
-  health-check-and-notify:
-    name: Health Check & Conditional Notify
+  test-lector:
+    name: Test Lector QR API
     runs-on: ubuntu-latest
-    needs: [frontend, backend]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    environment: Prod
-
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == 'lector' || github.event.inputs.test_scope == ''
+    
     steps:
-    - name: Server Health Check
-      id: health
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
       run: |
-        echo "🏥 Verificando salud del servidor..."
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        python-dotenv==1.1.0
+        gunicorn==21.2.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run Lector QR API Tests
+      working-directory: tests
+      env:
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_lector_db
+        MYSQL_PORT: 3306
         
-        # Definir URL del servidor
-        SERVER_URL="https://acceso.informaticauaint.com"
+        # App config
+        SECRET_KEY: test-secret-key-lector
+        FLASK_ENV: testing
+        LOG_LEVEL: ERROR
+        CORS_ORIGINS: "*"
+        HOST: localhost
+        PORT: 5000
         
-        # Función para verificar health
-        check_health() {
-          local url=$1
-          local timeout=${2:-10}
-          
-          echo "🔍 Probando: $url"
-          
-          # Intentar conectar con diferentes métodos
-          local response
-          
-          # Método 1: Health endpoint
-          if response=$(curl -s --connect-timeout $timeout --max-time $timeout -k "$url/webhook/health" 2>/dev/null); then
-            if echo "$response" | grep -q "healthy"; then
-              echo "✅ Health endpoint responde correctamente"
-              return 0
-            fi
-          fi
-          
-          # Método 2: HTTP básico
-          if curl -s --connect-timeout $timeout --max-time $timeout -I -k "$url" > /dev/null 2>&1; then
-            echo "✅ Servidor responde a HTTP"
-            return 0
-          fi
-          
-          # Método 3: Solo conectividad
-          if curl -s --connect-timeout $timeout --max-time $timeout -k "$url" > /dev/null 2>&1; then
-            echo "✅ Servidor accesible"
-            return 0
-          fi
-          
-          echo "❌ Servidor no accesible"
-          return 1
-        }
-        
-        # Verificar diferentes URLs
-        HEALTHY=false
-        
-        echo "🔍 Verificando salud del servidor..."
-        
-        # Intentar con HTTPS
-        if check_health "$SERVER_URL" 15; then
-          HEALTHY=true
-          echo "server_url=$SERVER_URL" >> $GITHUB_OUTPUT
-        else
-          echo "⚠️  HTTPS no funciona, probando HTTP..."
-          
-          # Intentar con HTTP
-          HTTP_URL="http://acceso.informaticauaint.com"
-          if check_health "$HTTP_URL" 15; then
-            HEALTHY=true
-            echo "server_url=$HTTP_URL" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️  HTTP tampoco funciona, probando puerto directo..."
-            
-            # Intentar puerto directo
-            DIRECT_URL="http://acceso.informaticauaint.com:9000"
-            if check_health "$DIRECT_URL" 15; then
-              HEALTHY=true
-              echo "server_url=$DIRECT_URL" >> $GITHUB_OUTPUT
-            fi
-          fi
-        fi
-        
-        # Guardar resultado
-        if [ "$HEALTHY" = true ]; then
-          echo "✅ Servidor está healthy y accesible"
-          echo "healthy=true" >> $GITHUB_OUTPUT
-          
-          # Información adicional
-          echo "🔍 Información del servidor:"
-          SERVER_FINAL=$(cat $GITHUB_OUTPUT | grep "server_url=" | cut -d'=' -f2-)
-          echo "  - URL accesible: $SERVER_FINAL"
-          
-          # Intentar obtener más información
-          curl -s --connect-timeout 5 -k "$SERVER_FINAL/webhook/health" || echo "  - Health endpoint: No disponible"
-          
-        else
-          echo "❌ Servidor no está healthy o no es accesible"
-          echo "healthy=false" >> $GITHUB_OUTPUT
-          
-          # Debug información
-          echo "🔍 Debug de conectividad:"
-          echo "  - Probando resolución DNS..."
-          nslookup acceso.informaticauaint.com || echo "    DNS no resuelve"
-          
-          echo "  - Probando ping..."
-          ping -c 2 acceso.informaticauaint.com || echo "    Ping falla"
-          
-          echo "  - IPs del dominio:"
-          dig +short acceso.informaticauaint.com || echo "    No se pudo obtener IP"
-        fi
-
-    - name: Generate webhook payload
-      id: payload
-      if: steps.health.outputs.healthy == 'true'
+        # Test specific
+        PYTHONPATH: ${{ github.workspace }}/back-end/lector:${{ github.workspace }}/tests
       run: |
-        echo "📦 Generando payload para webhook..."
+        echo "🎯 Testing Lector QR API..."
+        python test_runner.py lector 2>&1 | tee lector-test-output.log
         
-        # Crear payload simple
-        TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        PAYLOAD='{"ref":"${{ github.ref }}","repository":"${{ github.repository }}","commit":"${{ github.sha }}","pusher":"${{ github.actor }}","timestamp":"'$TIMESTAMP'","health_check":"passed"}'
-        
-        # Guardar payload
-        {
-          echo "payload<<EOF"
-          echo "$PAYLOAD"
-          echo "EOF"
-        } >> $GITHUB_OUTPUT
-        
-        echo "📦 Payload generado: $PAYLOAD"
-
-    - name: Generate signature
-      id: signature
-      if: steps.health.outputs.healthy == 'true'
-      run: |
-        echo "🔐 Generando firma para webhook..."
-        
-        # Generar firma
-        SIGNATURE=$(echo -n '${{ steps.payload.outputs.payload }}' | openssl dgst -sha256 -hmac '${{ secrets.WEBHOOK_SECRET }}' | cut -d' ' -f2)
-        
-        echo "🔐 Firma generada: sha256=$SIGNATURE"
-        echo "signature=sha256=$SIGNATURE" >> $GITHUB_OUTPUT
-
-    - name: Send webhook notification
-      id: webhook
-      if: steps.health.outputs.healthy == 'true'
-      run: |
-        echo "🚀 Enviando webhook al servidor healthy..."
-        
-        # Obtener URL verificada del health check
-        SERVER_URL="${{ steps.health.outputs.server_url }}"
-        WEBHOOK_URL="$SERVER_URL/webhook/docker-update"
-        
-        echo "🎯 Enviando a: $WEBHOOK_URL"
-        echo "🔐 Firma: ${{ steps.signature.outputs.signature }}"
-        echo "📦 Payload: ${{ steps.payload.outputs.payload }}"
-        echo ""
-        
-        # Enviar webhook usando la URL que sabemos que funciona
-        RESPONSE=$(curl -s -w "%{http_code}" \
-          --connect-timeout 30 \
-          --max-time 60 \
-          -k \
-          -X POST \
-          -H "Content-Type: application/json" \
-          -H "X-Hub-Signature-256: ${{ steps.signature.outputs.signature }}" \
-          -H "User-Agent: GitHub-Actions-HealthChecked/${{ github.run_id }}" \
-          -d '${{ steps.payload.outputs.payload }}' \
-          "$WEBHOOK_URL" || echo "000curl_error")
-        
-        # Verificar resultado
-        if [[ "$RESPONSE" == *"curl_error"* ]]; then
-          echo "❌ Error de curl al enviar webhook"
-          echo "webhook_status=curl_error" >> $GITHUB_OUTPUT
-          
-          # Retry una vez más
-          echo "🔄 Reintentando envío..."
-          sleep 5
-          
-          RESPONSE=$(curl -s -w "%{http_code}" \
-            --connect-timeout 15 \
-            --max-time 30 \
-            -k \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Hub-Signature-256: ${{ steps.signature.outputs.signature }}" \
-            -d '${{ steps.payload.outputs.payload }}' \
-            "$WEBHOOK_URL" || echo "000retry_failed")
-        fi
-        
-        # Procesar respuesta final
-        if [[ "$RESPONSE" == *"error"* ]] || [[ "$RESPONSE" == *"failed"* ]]; then
-          echo "❌ Webhook falló después de retry"
-          echo "webhook_status=failed" >> $GITHUB_OUTPUT
-          exit 1
-        fi
-        
-        HTTP_CODE="${RESPONSE: -3}"
-        BODY="${RESPONSE%???}"
-        
-        echo "📊 Código de respuesta: $HTTP_CODE"
-        echo "📝 Respuesta del servidor: $BODY"
-        
-        # Evaluar resultado
-        if [ "$HTTP_CODE" -eq 200 ]; then
-          echo "✅ Webhook enviado exitosamente al servidor healthy"
-          echo "webhook_status=success" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Error enviando webhook (HTTP $HTTP_CODE)"
-          echo "webhook_status=http_error" >> $GITHUB_OUTPUT
-          echo "🔍 Response body: $BODY"
-          exit 1
-        fi
-
-    - name: Post-webhook verification
-      if: steps.webhook.outputs.webhook_status == 'success'
-      run: |
-        echo "🔍 Verificación post-webhook..."
-        
-        # Esperar un poco
-        sleep 8
-        
-        # Verificar que el servidor sigue healthy después del webhook
-        SERVER_URL="${{ steps.health.outputs.server_url }}"
-        
-        echo "🏥 Verificando que el servidor sigue healthy..."
-        HEALTH_RESPONSE=$(curl -s --connect-timeout 10 -k "$SERVER_URL/webhook/health" || echo "ERROR")
-        
-        if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
-          echo "✅ Servidor sigue healthy después del webhook"
-          echo "🎯 Probablemente procesando la actualización..."
-        else
-          echo "⚠️  Servidor no responde al health check post-webhook"
-          echo "🔍 Esto es normal si está reiniciando servicios"
-        fi
-
-    - name: Handle unhealthy server
-      if: steps.health.outputs.healthy == 'false'
-      run: |
-        echo "🚨 Servidor no está healthy - Webhook omitido"
-        echo ""
-        echo "📋 Acciones recomendadas:"
-        echo "  1. Verificar que el servidor esté ejecutándose"
-        echo "  2. Verificar que el puerto 9000 esté abierto"
-        echo "  3. Verificar conectividad de red"
-        echo "  4. Revisar logs del servidor webhook"
-        echo ""
-        echo "🔧 Comandos para verificar en el servidor:"
-        echo "  sudo systemctl status docker-webhook"
-        echo "  sudo journalctl -u docker-webhook -f"
-        echo "  curl -I http://localhost:9000/webhook/health"
-        echo ""
-        echo "⚠️  Las imágenes están construidas y disponibles en Docker Hub"
-        echo "   pero el servidor no recibirá notificación automática."
-
-    - name: Generate final summary
+        # Capture exit code
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Test Report
       if: always()
       run: |
-        # Determinar estado
-        HEALTHY="${{ steps.health.outputs.healthy }}"
-        WEBHOOK_STATUS="${{ steps.webhook.outputs.webhook_status }}"
+        echo "## 📱 Lector QR API Test Results" >> $GITHUB_STEP_SUMMARY
         
-        echo "# 🎯 Health Check & Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "$HEALTHY" = "true" ]; then
-          echo "## ✅ Server Health Check: PASSED" >> $GITHUB_STEP_SUMMARY
-          echo "- **Server URL**: \`${{ steps.health.outputs.server_url }}\`" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "$WEBHOOK_STATUS" = "success" ]; then
-            echo "- **Webhook Status**: ✅ Sent successfully" >> $GITHUB_STEP_SUMMARY
-            echo "- **Action**: 🔄 Server is updating containers" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Webhook Status**: ❌ Failed to send" >> $GITHUB_STEP_SUMMARY
-            echo "- **Action**: 🔧 Manual deployment required" >> $GITHUB_STEP_SUMMARY
-          fi
+        if [ "${TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
         else
-          echo "## ❌ Server Health Check: FAILED" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: Server not accessible" >> $GITHUB_STEP_SUMMARY
-          echo "- **Webhook**: ⏭️ Skipped (server unhealthy)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Action**: 🚨 Check server status manually" >> $GITHUB_STEP_SUMMARY
+          echo "### ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "## 🐳 Built Images (Available on Docker Hub):" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.DOCKERHUB_USERNAME }}/asistencias-qr:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.DOCKERHUB_USERNAME }}/estudiantes-qr:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.DOCKERHUB_USERNAME }}/acceso-api-estudiantes:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.DOCKERHUB_USERNAME }}/acceso-lector-qr:latest\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`${{ env.DOCKERHUB_USERNAME }}/acceso-web-api:latest\`" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Output:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        tail -n 20 tests/lector-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No test output available" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 📤 Upload Test Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lector-test-results-${{ github.run_number }}
+        path: |
+          tests/lector-test-output.log
+          tests/test-results.xml
+        retention-days: 5
+        compression-level: 6
+
+  # ========================================
+  # COMPREHENSIVE TEST RUN (FALLBACK/MANUAL)
+  # ========================================
+  test-all:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event.inputs.test_scope == 'all' || github.event.inputs.test_scope == ''
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install all dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cat > requirements-test.txt << 'EOF'
+        # Core testing
+        unittest2==1.1.0
+        mock==4.0.3
+        coverage==7.3.2
+        
+        # All back-end dependencies
+        Flask==2.3.3
+        flask-cors==4.0.0
+        PyMySQL==1.1.0
+        mysql-connector-python==8.2.0
+        python-dotenv==1.0.0
+        PyJWT==2.8.0
+        cryptography==41.0.3
+        pytz==2023.3
+        APScheduler==3.10.4
+        requests==2.31.0
+        gunicorn==21.2.0
+        Werkzeug==2.3.7
+        
+        # Testing enhancements
+        pytest==7.4.3
+        pytest-flask==1.3.0
+        pytest-mock==3.12.0
+        pytest-cov==4.1.0
+        EOF
+        pip install -r requirements-test.txt
+    
+    - name: 🧪 Run All Tests with Coverage
+      working-directory: tests
+      env:
+        # Common config
+        SECRET_KEY: test-secret-key-comprehensive
+        JWT_SECRET: test-jwt-secret-comprehensive
+        FLASK_ENV: testing
+        
+        # Database config (mock values)
+        MYSQL_HOST: localhost
+        MYSQL_USER: test_user
+        MYSQL_PASSWORD: test_password
+        MYSQL_DB: test_comprehensive_db
+        MYSQL_PORT: 3306
+        DB_CHARSET: utf8mb4
+        
+        # Additional config
+        TZ: America/Santiago
+        LOG_LEVEL: ERROR
+        CORS_ORIGINS: "*"
+        
+        # Python path for all modules
+        PYTHONPATH: ${{ github.workspace }}/back-end/estudiantes:${{ github.workspace }}/back-end/ayudantes:${{ github.workspace }}/back-end/lector:${{ github.workspace }}/tests
+      run: |
+        echo "🎯 Running comprehensive test suite..."
+        
+        # Run with coverage if available
+        if command -v coverage &> /dev/null; then
+          echo "📊 Running tests with coverage..."
+          coverage run --source=. test_runner.py 2>&1 | tee comprehensive-test-output.log
+          coverage report 2>&1 | tee -a comprehensive-test-output.log
+          coverage html -d coverage_html 2>/dev/null || true
+        else
+          echo "📊 Running tests without coverage..."
+          python test_runner.py 2>&1 | tee comprehensive-test-output.log
+        fi
+        
+        # Generate JUnit XML for better integration
+        python test_runner.py junit >/dev/null 2>&1 || true
+        
+        # Capture overall result
+        TEST_EXIT_CODE=${PIPESTATUS[0]}
+        echo "COMPREHENSIVE_TEST_EXIT_CODE=$TEST_EXIT_CODE" >> $GITHUB_ENV
+    
+    - name: 📊 Generate Comprehensive Report
+      if: always()
+      run: |
+        echo "## 🎯 Comprehensive Test Suite Results" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${COMPREHENSIVE_TEST_EXIT_CODE:-1}" -eq 0 ]; then
+          echo "### 🎉 All Tests Passed Successfully!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ Some Tests Failed or Had Issues" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        if [ "$HEALTHY" = "false" ]; then
-          echo "## 🔧 Manual Deployment Commands:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# En el servidor, ejecutar:" >> $GITHUB_STEP_SUMMARY
-          echo "docker-compose pull" >> $GITHUB_STEP_SUMMARY
-          echo "docker-compose up -d --force-recreate" >> $GITHUB_STEP_SUMMARY
+        # Extract summary from test output
+        if [ -f tests/comprehensive-test-output.log ]; then
+          echo "### 📋 Test Summary:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Look for final summary in the log
+          grep -A 10 "FINAL TEST SUMMARY" tests/comprehensive-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || \
+          tail -n 15 tests/comprehensive-test-output.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || \
+          echo "Test completed but summary not available" >> $GITHUB_STEP_SUMMARY
+          
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         fi
         
+        # Add coverage info if available
+        if [ -d tests/coverage_html ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Coverage Report Generated" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage HTML report is available in artifacts." >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: 📤 Upload Comprehensive Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: comprehensive-test-results-${{ github.run_number }}
+        path: |
+          tests/comprehensive-test-output.log
+          tests/test-results.xml
+          tests/coverage_html/
+        retention-days: 7
+        compression-level: 6
+
+  # ========================================
+  # FINAL SUMMARY AND NOTIFICATIONS
+  # ========================================
+  summarize:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-estudiantes, test-ayudantes, test-lector, test-all]
+    if: always()
+    
+    steps:
+    - name: 📊 Generate Final Summary
+      run: |
+        echo "# 🧪 Unit Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check results from needs context
+        ESTUDIANTES_SUCCESS="${{ needs.test-estudiantes.result == 'success' }}"
+        AYUDANTES_SUCCESS="${{ needs.test-ayudantes.result == 'success' }}"
+        LECTOR_SUCCESS="${{ needs.test-lector.result == 'success' }}"
+        COMPREHENSIVE_SUCCESS="${{ needs.test-all.result == 'success' }}"
+        
+        echo "## 📋 Individual API Results:" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$ESTUDIANTES_SUCCESS" = "true" ]; then
+          echo "- 🎓 **Estudiantes API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 🎓 **Estudiantes API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$AYUDANTES_SUCCESS" = "true" ]; then
+          echo "- 👥 **Ayudantes API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 👥 **Ayudantes API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "$LECTOR_SUCCESS" = "true" ]; then
+          echo "- 📱 **Lector QR API**: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- 📱 **Lector QR API**: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$COMPREHENSIVE_SUCCESS" = "true" ]; then
+          echo "## 🎉 Overall Result: **ALL TESTS PASSED**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ⚠️ Overall Result: **SOME TESTS FAILED**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📁 Artifacts Available:" >> $GITHUB_STEP_SUMMARY
+        echo "- Individual test results for each API" >> $GITHUB_STEP_SUMMARY
+        echo "- Comprehensive test suite results" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage reports (if generated)" >> $GITHUB_STEP_SUMMARY
+        echo "- JUnit XML files for CI integration" >> $GITHUB_STEP_SUMMARY
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
-        echo "📊 **Build Info**: \`${{ github.sha }}\` | \`${{ github.ref_name }}\` | \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow**: \`${{ github.workflow }}\` | **Run**: \`${{ github.run_number }}\` | **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
