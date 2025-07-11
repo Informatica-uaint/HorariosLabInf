@@ -5,6 +5,7 @@ mysql-connector-python==8.2.0
 python-dotenv==1.0.0
 gunicorn==21.2.0
 python-dateutil==2.8.2
+pytz
 
 # Dependencias para desarrollo (opcional)
 pytest==7.4.3
