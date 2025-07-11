@@ -37,9 +37,9 @@ jobs:
           - name: front-end-web
             path: front-end/web
             image_name: front-end-web
-          - name: front-end-lector
-            path: front-end/lector
-            image_name: front-end--lector
+          #- name: front-end-lector
+          #  path: front-end/lector
+          #  image_name: front-end--lector
 
     steps:
     - name: Checkout repository
