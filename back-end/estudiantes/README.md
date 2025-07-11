@@ -15,6 +15,7 @@ pytest==7.4.3
 pytest-flask==1.3.0
 black==23.11.0
 flake8==6.1.0
+pytz
 ```
 
 ## Environment variables
