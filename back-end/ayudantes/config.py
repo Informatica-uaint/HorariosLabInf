@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
-env_path = Path(__file__).parent / '.env'
+env_path = Path(__file__).parent / '.env.example'
 load_dotenv(dotenv_path=env_path)
 
 class Config:

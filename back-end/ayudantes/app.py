@@ -22,7 +22,7 @@ from routes.estado import estado_bp
 from tasks.scheduled_tasks import configurar_tarea_cierre_diario, configurar_reinicio_semanal
 
 # Cargar variables de entorno
-env_path = Path(__file__).parent / '.env'
+env_path = Path(__file__).parent / '.env.example'
 load_dotenv(dotenv_path=env_path)
 
 def create_app():
