@@ -21,6 +21,7 @@ import threading
 import sys
 import pymysql
 from pyzbar import pyzbar
+from pyzbar.pyzbar import ZBarSymbol
 import os
 from dotenv import load_dotenv
 
@@ -501,8 +502,15 @@ class QRReaderSystem(BackgroundLayout):
     def process_qr_detection(self, frame, display_frame, current_time):
         """Procesar detección de QR"""
         try:
+            # Mejorar la imagen para mejor detección
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            qr_codes = pyzbar.decode(gray)
+            
+            # Aplicar filtros para mejorar la detección
+            gray = cv2.GaussianBlur(gray, (3, 3), 0)
+            gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+            
+            # Decodificar solo códigos QR (evita problemas con PDF417)
+            qr_codes = pyzbar.decode(gray, symbols=[ZBarSymbol.QRCODE])
             
             for qr in qr_codes:
                 points = qr.polygon
