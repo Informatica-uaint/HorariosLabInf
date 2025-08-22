@@ -43,29 +43,64 @@ DB_CONFIG = {
     'cursorclass': pymysql.cursors.DictCursor
 }
 
-# Colores para la interfaz
+# Colores para la interfaz moderna
 COLORS = {
-    'primary': '#3498db',
-    'success': '#2ecc71',
-    'error': '#e74c3c',
-    'warning': '#f39c12',
-    'dark_bg': '#2c3e50',
-    'light_text': '#ecf0f1',
-    'accent': '#9b59b6',
-    'button': '#3498db',
-    'entry': '#27ae60',
-    'exit': '#e67e22',
-    'qr_mode': '#16a085'
+    'primary': '#667eea',           # Azul moderno
+    'primary_dark': '#5a67d8',     # Azul más oscuro
+    'success': '#48bb78',          # Verde suave
+    'success_light': '#68d391',    # Verde claro
+    'error': '#f56565',            # Rojo suave
+    'error_light': '#fc8181',      # Rojo claro
+    'warning': '#ed8936',          # Naranja suave
+    'warning_light': '#f6ad55',    # Naranja claro
+    'dark_bg': '#1a202c',          # Fondo oscuro moderno
+    'card_bg': '#2d3748',          # Fondo de tarjetas
+    'light_text': '#f7fafc',       # Texto claro
+    'secondary_text': '#a0aec0',   # Texto secundario
+    'accent': '#805ad5',           # Púrpura moderno
+    'accent_light': '#9f7aea',     # Púrpura claro
+    'button': '#4299e1',           # Botón azul
+    'button_hover': '#3182ce',     # Botón hover
+    'entry': '#38a169',            # Verde entrada
+    'exit': '#dd6b20',             # Naranja salida
+    'qr_frame': '#fbd38d',         # Marco QR dorado
+    'shadow': '#00000040'          # Sombra
 }
 
-class BackgroundLayout(BoxLayout):
-    """BoxLayout con fondo personalizado"""
-    def __init__(self, bg_color=COLORS['dark_bg'], **kwargs):
-        super(BackgroundLayout, self).__init__(**kwargs)
+class ModernCard(BoxLayout):
+    """Tarjeta moderna con bordes redondeados y sombra"""
+    def __init__(self, bg_color=COLORS['card_bg'], border_radius=15, padding_val=20, **kwargs):
+        super(ModernCard, self).__init__(**kwargs)
+        self.padding = [padding_val] * 4
         self.bg_color = get_color_from_hex(bg_color)
+        self.border_radius = border_radius
         
         with self.canvas.before:
             Color(*self.bg_color)
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+        
+        self.bind(pos=self._update_graphics, size=self._update_graphics)
+    
+    def _update_graphics(self, *args):
+        self.canvas.before.clear()
+        with self.canvas.before:
+            # Sombra sutil
+            Color(*get_color_from_hex(COLORS['shadow']))
+            Rectangle(pos=(self.pos[0] + 3, self.pos[1] - 3), size=self.size)
+            
+            # Fondo principal
+            Color(*self.bg_color)
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+
+class GradientBackground(BoxLayout):
+    """Fondo con gradiente"""
+    def __init__(self, color1=COLORS['dark_bg'], color2=COLORS['card_bg'], **kwargs):
+        super(GradientBackground, self).__init__(**kwargs)
+        self.color1 = get_color_from_hex(color1)
+        self.color2 = get_color_from_hex(color2)
+        
+        with self.canvas.before:
+            Color(*self.color1)
             self.bg_rect = Rectangle(pos=self.pos, size=self.size)
         
         self.bind(pos=self._update_rect, size=self._update_rect)
@@ -73,6 +108,25 @@ class BackgroundLayout(BoxLayout):
     def _update_rect(self, *args):
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
+
+class StatusIndicator(Label):
+    """Indicador de estado con colores dinámicos"""
+    def __init__(self, status_type='info', **kwargs):
+        super(StatusIndicator, self).__init__(**kwargs)
+        self.status_type = status_type
+        self.font_size = '12sp'
+        self.bold = True
+        self.update_appearance()
+    
+    def update_appearance(self):
+        status_colors = {
+            'success': COLORS['success'],
+            'error': COLORS['error'],
+            'warning': COLORS['warning'],
+            'info': COLORS['button'],
+            'active': COLORS['entry']
+        }
+        self.color = get_color_from_hex(status_colors.get(self.status_type, COLORS['secondary_text']))
 
 class DatabaseManager:
     """Manejador de base de datos MySQL"""
@@ -192,9 +246,9 @@ class DatabaseManager:
         finally:
             connection.close()
 
-class QRReaderSystem(BackgroundLayout):
+class QRReaderSystem(GradientBackground):
     def __init__(self, **kwargs):
-        super(QRReaderSystem, self).__init__(bg_color=COLORS['dark_bg'], **kwargs)
+        super(QRReaderSystem, self).__init__(**kwargs)
         self.orientation = 'vertical'
         
         # Configuración de cámara
@@ -221,7 +275,7 @@ class QRReaderSystem(BackgroundLayout):
         
         # Iniciar loop de cámara si está disponible
         if self.camera_active:
-            Clock.schedule_interval(self.update_camera, 1.0 / 10.0)
+            Clock.schedule_interval(self.update_camera, 1.0 / 5.0)  # 5 FPS para mejor detección
         
         print("Lector QR con MySQL iniciado")
         print(f"Base de datos: {'CONECTADA' if self.db_connected else 'ERROR'}")
@@ -254,182 +308,277 @@ class QRReaderSystem(BackgroundLayout):
             self.capture = None
     
     def setup_ui(self):
-        """Configurar interfaz de usuario"""
-        # Header con título
-        header = BackgroundLayout(
-            orientation='horizontal', 
-            size_hint=(1, 0.1), 
-            bg_color=COLORS['dark_bg']
+        """Configurar interfaz de usuario moderna"""
+        self.padding = [20, 20, 20, 20]
+        self.spacing = 15
+        
+        # Header moderno con degradado
+        header = ModernCard(
+            orientation='vertical', 
+            size_hint=(1, 0.15), 
+            bg_color=COLORS['primary'],
+            padding_val=25
         )
         
+        # Título principal con estilo
         self.title_label = Label(
-            text="LECTOR QR - LABORATORIO INFORMÁTICA (MySQL Direct)",
-            font_size='16sp',
+            text="🔍 LECTOR QR LABORATORIO",
+            font_size='24sp',
             bold=True,
-            color=get_color_from_hex(COLORS['light_text'])
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.6)
         )
         header.add_widget(self.title_label)
+        
+        # Subtítulo elegante
+        subtitle = Label(
+            text="Universidad Adolfo Ibáñez • Informática • MySQL Direct",
+            font_size='13sp',
+            color=get_color_from_hex(COLORS['secondary_text']),
+            size_hint=(1, 0.4)
+        )
+        header.add_widget(subtitle)
         self.add_widget(header)
         
-        # Layout principal
-        main_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.8))
+        # Layout principal con espaciado moderno
+        main_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.75), spacing=20)
         
-        # Panel izquierdo - Cámara
-        left_panel = BackgroundLayout(
+        # Panel izquierdo - Cámara con tarjeta moderna
+        camera_card = ModernCard(
             orientation='vertical', 
-            size_hint=(0.7, 1), 
-            bg_color=COLORS['dark_bg']
+            size_hint=(0.65, 1),
+            bg_color=COLORS['card_bg'],
+            padding_val=15
         )
         
-        # Vista de cámara
+        # Título de sección de cámara
+        camera_title = Label(
+            text="📷 Vista de Cámara",
+            font_size='16sp',
+            bold=True,
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.08)
+        )
+        camera_card.add_widget(camera_title)
+        
+        # Vista de cámara con marco elegante
         if self.camera_active:
-            self.camera_image = Image(size_hint=(1, 0.9))
-            left_panel.add_widget(self.camera_image)
+            camera_container = ModernCard(
+                size_hint=(1, 0.82),
+                bg_color=COLORS['dark_bg'],
+                padding_val=5
+            )
+            self.camera_image = Image(size_hint=(1, 1))
+            camera_container.add_widget(self.camera_image)
+            camera_card.add_widget(camera_container)
         else:
+            camera_error_card = ModernCard(
+                size_hint=(1, 0.82),
+                bg_color=COLORS['error'],
+                padding_val=30
+            )
             camera_error = Label(
-                text="CÁMARA NO DISPONIBLE\n\nNo se pudo acceder a la cámara.\nVerifique que esté conectada\ny no esté siendo usada por\notra aplicación.",
+                text="📹 CÁMARA NO DISPONIBLE\n\n🔌 Conecte una cámara web\n⚠️ Cierre otras aplicaciones\n🔄 Presione 'Reintentar'",
                 font_size='14sp',
-                color=get_color_from_hex(COLORS['error']),
-                size_hint=(1, 0.9),
+                color=get_color_from_hex(COLORS['light_text']),
+                size_hint=(1, 1),
                 text_size=(None, None),
                 halign='center',
                 valign='center'
             )
-            left_panel.add_widget(camera_error)
+            camera_error_card.add_widget(camera_error)
+            camera_card.add_widget(camera_error_card)
         
-        # Botones de cámara
+        # Botones de cámara con estilo moderno
         camera_buttons = BoxLayout(
             orientation='horizontal', 
             size_hint=(1, 0.1), 
-            spacing=5
+            spacing=10
         )
         
         self.scan_button = Button(
-            text="PAUSAR" if self.camera_active else "CÁMARA NO DISPONIBLE",
-            background_color=get_color_from_hex(COLORS['button'] if self.camera_active else COLORS['error']),
+            text="⏸️ PAUSAR" if self.camera_active else "❌ CÁMARA NO DISPONIBLE",
+            background_color=get_color_from_hex(COLORS['warning'] if self.camera_active else COLORS['error']),
             color=get_color_from_hex(COLORS['light_text']),
             bold=True,
-            disabled=not self.camera_active
+            disabled=not self.camera_active,
+            font_size='12sp'
         )
         if self.camera_active:
             self.scan_button.bind(on_press=self.toggle_scanning)
         
         retry_camera_button = Button(
-            text="REINTENTAR CÁMARA",
+            text="🔄 REINTENTAR",
             background_color=get_color_from_hex(COLORS['accent']),
             color=get_color_from_hex(COLORS['light_text']),
-            bold=True
+            bold=True,
+            font_size='12sp'
         )
         retry_camera_button.bind(on_press=self.retry_camera)
         
         camera_buttons.add_widget(self.scan_button)
         camera_buttons.add_widget(retry_camera_button)
-        left_panel.add_widget(camera_buttons)
+        camera_card.add_widget(camera_buttons)
         
-        main_layout.add_widget(left_panel)
+        main_layout.add_widget(camera_card)
         
-        # Panel derecho - Información
-        right_panel = BackgroundLayout(
-            orientation='vertical', 
-            size_hint=(0.3, 1),
-            bg_color=COLORS['dark_bg'], 
-            padding=[10, 5], 
-            spacing=5
+        # Panel derecho - Dashboard moderno
+        right_panel = BoxLayout(
+            orientation='vertical',
+            size_hint=(0.35, 1),
+            spacing=15
         )
         
-        # Estado del sistema
+        # Tarjeta de estado principal
+        status_card = ModernCard(
+            orientation='vertical',
+            size_hint=(1, 0.25),
+            bg_color=COLORS['success'] if (self.camera_active and self.db_connected) else COLORS['error'],
+            padding_val=20
+        )
+        
+        # Icono y estado principal
+        status_icon = "✅" if (self.camera_active and self.db_connected) else "⚠️"
         if self.camera_active and self.db_connected:
-            status_text = "Lector QR Activo"
-            status_color = COLORS['success']
+            status_text = f"{status_icon} SISTEMA OPERATIVO"
+            status_subtitle = "Listo para escanear códigos QR"
         elif not self.camera_active:
-            status_text = "Cámara No Disponible"
-            status_color = COLORS['error']
+            status_text = f"{status_icon} CÁMARA ERROR"
+            status_subtitle = "Conecte una cámara web"
         elif not self.db_connected:
-            status_text = "Base de Datos Error"
-            status_color = COLORS['error']
+            status_text = f"{status_icon} BASE DATOS ERROR"
+            status_subtitle = "Verifique conexión MySQL"
         else:
-            status_text = "Sistema No Operativo"
-            status_color = COLORS['error']
+            status_text = f"{status_icon} SISTEMA INACTIVO"
+            status_subtitle = "Múltiples errores detectados"
             
         self.status_label = Label(
             text=status_text,
+            font_size='16sp',
+            bold=True,
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.6)
+        )
+        status_card.add_widget(self.status_label)
+        
+        status_subtitle_label = Label(
+            text=status_subtitle,
+            font_size='11sp',
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.4),
+            opacity=0.8
+        )
+        status_card.add_widget(status_subtitle_label)
+        right_panel.add_widget(status_card)
+        
+        # Tarjeta de información detallada
+        info_card = ModernCard(
+            orientation='vertical',
+            size_hint=(1, 0.35),
+            bg_color=COLORS['card_bg'],
+            padding_val=20
+        )
+        
+        info_title = Label(
+            text="📋 Información del Sistema",
             font_size='14sp',
             bold=True,
-            color=get_color_from_hex(status_color),
-            size_hint=(1, 0.15),
-            text_size=(None, None),
-            halign='center'
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.2)
         )
-        right_panel.add_widget(self.status_label)
+        info_card.add_widget(info_title)
         
-        # Información detallada
         if self.camera_active and self.db_connected:
-            info_text = "Listo para escanear códigos QR\n\nApunte la cámara hacia un\ncódigo QR válido\n\nEl sistema registrará\nautomáticamente en MySQL"
+            info_text = "🔍 Sistema listo para operar\n\n📷 Apunte códigos QR al centro\n🔒 Conexión MySQL segura\n⚡ Detección automática activa"
         elif not self.camera_active:
-            info_text = "La cámara no está disponible\n\nVerifique que esté conectada\ny no esté siendo usada por\notra aplicación"
+            info_text = "⚠️ Cámara no disponible\n\n🔌 Conecte una cámara web\n❌ Cierre otras aplicaciones\n🔄 Use el botón 'Reintentar'"
         elif not self.db_connected:
-            info_text = "Error de conexión MySQL\n\nVerifique las credenciales\nen el archivo .env.example\n\nHost, usuario, contraseña\ny base de datos"
+            info_text = "⚠️ Error de base de datos\n\n🔧 Verifique archivo .env\n🌐 Confirme conectividad\n📞 Contacte soporte técnico"
         else:
-            info_text = "Sistema no operativo\n\nRevise la cámara y\nla conexión MySQL"
+            info_text = "❌ Sistema no operativo\n\n🔧 Múltiples componentes fallan\n⚠️ Revise cámara y MySQL\n🆘 Reinicie la aplicación"
             
         self.info_label = Label(
             text=info_text,
-            font_size='10sp',
-            color=get_color_from_hex(COLORS['light_text']),
-            size_hint=(1, 0.4),
+            font_size='11sp',
+            color=get_color_from_hex(COLORS['secondary_text']),
+            size_hint=(1, 0.8),
             text_size=(None, None),
             halign='left',
             valign='top'
         )
-        right_panel.add_widget(self.info_label)
+        info_card.add_widget(self.info_label)
+        right_panel.add_widget(info_card)
         
-        # Estado de base de datos
-        db_status_text = "MySQL: " + ("CONECTADA" if self.db_connected else "ERROR")
-        db_color = COLORS['success'] if self.db_connected else COLORS['error']
+        # Tarjeta de estado de componentes
+        status_components_card = ModernCard(
+            orientation='vertical',
+            size_hint=(1, 0.25),
+            bg_color=COLORS['card_bg'],
+            padding_val=15
+        )
+        
+        components_title = Label(
+            text="🔧 Estado de Componentes",
+            font_size='13sp',
+            bold=True,
+            color=get_color_from_hex(COLORS['light_text']),
+            size_hint=(1, 0.3)
+        )
+        status_components_card.add_widget(components_title)
+        
+        # Estados con iconos
+        db_icon = "🟢" if self.db_connected else "🔴"
+        camera_icon = "🟢" if self.camera_active else "🔴"
         
         self.db_status_label = Label(
-            text=db_status_text,
+            text=f"{db_icon} MySQL: {'CONECTADA' if self.db_connected else 'ERROR'}",
             font_size='11sp',
-            bold=True,
-            color=get_color_from_hex(db_color),
-            size_hint=(1, 0.1)
+            color=get_color_from_hex(COLORS['success'] if self.db_connected else COLORS['error']),
+            size_hint=(1, 0.35)
         )
-        right_panel.add_widget(self.db_status_label)
-        
-        # Estado de cámara
-        camera_status_text = "CÁMARA: " + ("OK" if self.camera_active else "ERROR")
-        camera_color = COLORS['success'] if self.camera_active else COLORS['error']
+        status_components_card.add_widget(self.db_status_label)
         
         self.camera_status_label = Label(
-            text=camera_status_text,
+            text=f"{camera_icon} Cámara: {'OPERATIVA' if self.camera_active else 'ERROR'}",
             font_size='11sp',
-            bold=True,
-            color=get_color_from_hex(camera_color),
-            size_hint=(1, 0.1)
+            color=get_color_from_hex(COLORS['success'] if self.camera_active else COLORS['error']),
+            size_hint=(1, 0.35)
         )
-        right_panel.add_widget(self.camera_status_label)
+        status_components_card.add_widget(self.camera_status_label)
+        right_panel.add_widget(status_components_card)
+        
+        # Botones de acción modernos
+        actions_card = ModernCard(
+            orientation='vertical',
+            size_hint=(1, 0.15),
+            bg_color=COLORS['card_bg'],
+            padding_val=10
+        )
         
         # Botón de reconectar DB
         reconnect_db_button = Button(
-            text="RECONECTAR MySQL",
+            text="🔄 RECONECTAR MySQL",
             background_color=get_color_from_hex(COLORS['accent']),
             color=get_color_from_hex(COLORS['light_text']),
             bold=True,
-            size_hint=(1, 0.1)
+            size_hint=(1, 0.45),
+            font_size='11sp'
         )
         reconnect_db_button.bind(on_press=self.reconnect_db)
-        right_panel.add_widget(reconnect_db_button)
+        actions_card.add_widget(reconnect_db_button)
         
         # Botón de salir
         quit_button = Button(
-            text="SALIR",
+            text="❌ SALIR",
             background_color=get_color_from_hex(COLORS['error']),
             color=get_color_from_hex(COLORS['light_text']),
             bold=True,
-            size_hint=(1, 0.1)
+            size_hint=(1, 0.45),
+            font_size='11sp'
         )
         quit_button.bind(on_press=self.quit_app)
-        right_panel.add_widget(quit_button)
+        actions_card.add_widget(quit_button)
+        right_panel.add_widget(actions_card)
         
         main_layout.add_widget(right_panel)
         self.add_widget(main_layout)
@@ -454,7 +603,7 @@ class QRReaderSystem(BackgroundLayout):
                 self.setup_ui()
             
             Clock.unschedule(self.update_camera)
-            Clock.schedule_interval(self.update_camera, 1.0 / 10.0)
+            Clock.schedule_interval(self.update_camera, 1.0 / 5.0)
         else:
             self.camera_status_label.text = "CÁMARA: ERROR"
             self.camera_status_label.color = get_color_from_hex(COLORS['error'])
@@ -502,15 +651,94 @@ class QRReaderSystem(BackgroundLayout):
     def process_qr_detection(self, frame, display_frame, current_time):
         """Procesar detección de QR"""
         try:
-            # Mejorar la imagen para mejor detección
+            # Convertir a escala de grises
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
-            # Aplicar filtros para mejorar la detección
-            gray = cv2.GaussianBlur(gray, (3, 3), 0)
-            gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+            # Probar múltiples métodos de detección
+            qr_codes = []
             
-            # Decodificar solo códigos QR (evita problemas con PDF417)
+            # Método 1: Imagen original
             qr_codes = pyzbar.decode(gray, symbols=[ZBarSymbol.QRCODE])
+            
+            # Método 2: Si no encuentra nada, probar con ecualización
+            if not qr_codes:
+                equalized = cv2.equalizeHist(gray)
+                qr_codes = pyzbar.decode(equalized, symbols=[ZBarSymbol.QRCODE])
+            
+            # Método 3: Si aún no encuentra, probar con umbralización adaptativa
+            if not qr_codes:
+                adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                qr_codes = pyzbar.decode(adaptive, symbols=[ZBarSymbol.QRCODE])
+            
+            # Mostrar área de detección elegante
+            height, width = display_frame.shape[:2]
+            center_x, center_y = width // 2, height // 2
+            box_size = min(width, height) // 4
+            
+            # Crear marco de detección con esquinas redondeadas
+            corner_length = 30
+            thickness = 3
+            
+            # Color dorado para el marco (RGB en BGR)
+            frame_color = (89, 193, 251)  # Dorado en BGR
+            
+            # Esquinas superiores
+            cv2.line(display_frame, 
+                    (center_x - box_size, center_y - box_size), 
+                    (center_x - box_size + corner_length, center_y - box_size), 
+                    frame_color, thickness)
+            cv2.line(display_frame, 
+                    (center_x - box_size, center_y - box_size), 
+                    (center_x - box_size, center_y - box_size + corner_length), 
+                    frame_color, thickness)
+            
+            cv2.line(display_frame, 
+                    (center_x + box_size, center_y - box_size), 
+                    (center_x + box_size - corner_length, center_y - box_size), 
+                    frame_color, thickness)
+            cv2.line(display_frame, 
+                    (center_x + box_size, center_y - box_size), 
+                    (center_x + box_size, center_y - box_size + corner_length), 
+                    frame_color, thickness)
+            
+            # Esquinas inferiores
+            cv2.line(display_frame, 
+                    (center_x - box_size, center_y + box_size), 
+                    (center_x - box_size + corner_length, center_y + box_size), 
+                    frame_color, thickness)
+            cv2.line(display_frame, 
+                    (center_x - box_size, center_y + box_size), 
+                    (center_x - box_size, center_y + box_size - corner_length), 
+                    frame_color, thickness)
+            
+            cv2.line(display_frame, 
+                    (center_x + box_size, center_y + box_size), 
+                    (center_x + box_size - corner_length, center_y + box_size), 
+                    frame_color, thickness)
+            cv2.line(display_frame, 
+                    (center_x + box_size, center_y + box_size), 
+                    (center_x + box_size, center_y + box_size - corner_length), 
+                    frame_color, thickness)
+            
+            # Texto con fondo elegante
+            text = "📱 Coloque el QR aquí"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            text_thickness = 2
+            
+            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, text_thickness)
+            text_x = center_x - text_width // 2
+            text_y = center_y + box_size + 40
+            
+            # Fondo del texto
+            cv2.rectangle(display_frame, 
+                         (text_x - 10, text_y - text_height - 5),
+                         (text_x + text_width + 10, text_y + baseline + 5),
+                         (0, 0, 0), -1)
+            
+            cv2.putText(display_frame, text, 
+                       (text_x, text_y),
+                       font, font_scale, frame_color, text_thickness)
             
             for qr in qr_codes:
                 points = qr.polygon
@@ -521,16 +749,62 @@ class QRReaderSystem(BackgroundLayout):
                     
                     pts = np.array(pts, np.int32)
                     pts = pts.reshape((-1, 1, 2))
-                    cv2.polylines(display_frame, [pts], True, (0, 255, 0), 3)
                     
-                    cv2.putText(display_frame, "QR DETECTADO", 
-                               (qr.rect.left, qr.rect.top - 10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    # Contorno verde brillante del QR detectado
+                    cv2.polylines(display_frame, [pts], True, (0, 255, 0), 4)
+                    
+                    # Crear overlay para efecto de brillo
+                    overlay = display_frame.copy()
+                    cv2.fillPoly(overlay, [pts], (0, 255, 0))
+                    cv2.addWeighted(display_frame, 0.9, overlay, 0.1, 0, display_frame)
+                    
+                    # Texto elegante "QR DETECTADO"
+                    success_text = "✅ QR DETECTADO"
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.8
+                    text_thickness = 2
+                    
+                    (text_width, text_height), baseline = cv2.getTextSize(success_text, font, font_scale, text_thickness)
+                    text_x = qr.rect.left
+                    text_y = qr.rect.top - 15
+                    
+                    # Asegurar que el texto esté dentro de la pantalla
+                    if text_y < text_height:
+                        text_y = qr.rect.top + qr.rect.height + text_height + 15
+                    
+                    # Fondo del texto con bordes redondeados (simulado)
+                    cv2.rectangle(display_frame, 
+                                 (text_x - 5, text_y - text_height - 5),
+                                 (text_x + text_width + 5, text_y + baseline + 5),
+                                 (0, 0, 0), -1)
+                    
+                    cv2.putText(display_frame, success_text, 
+                               (text_x, text_y),
+                               font, font_scale, (0, 255, 0), text_thickness)
                 
                 if current_time - self.last_scan_time > self.scan_cooldown:
                     qr_data = qr.data.decode('utf-8')
+                    print(f"QR detectado - Tipo: {qr.type}, Datos: {qr_data[:100]}...")
                     self.process_qr_async(qr_data, current_time)
                     self.last_scan_time = current_time
+            
+            # Estado de búsqueda elegante
+            if not qr_codes:
+                status_text = "🔍 Buscando códigos QR..."
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.6
+                text_thickness = 2
+                
+                (text_width, text_height), baseline = cv2.getTextSize(status_text, font, font_scale, text_thickness)
+                
+                # Posición en la esquina superior izquierda
+                cv2.rectangle(display_frame, 
+                             (5, 5),
+                             (text_width + 15, text_height + 15),
+                             (0, 0, 0), -1)
+                
+                cv2.putText(display_frame, status_text, 
+                           (10, text_height + 10), font, font_scale, (89, 193, 251), text_thickness)
         except Exception as e:
             print(f"Error en detección QR: {e}")
     
