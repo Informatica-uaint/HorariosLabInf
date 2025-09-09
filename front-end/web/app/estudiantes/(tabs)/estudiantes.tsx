@@ -18,7 +18,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
-const API_BASE = 'https://acceso.informaticauaint.com/api/estudiantes';
+const API_BASE = 'https://api.acceso.informaticauaint.com/api/estudiantes';
 
 // Tipo para los datos de estudiante
 type Estudiante = {

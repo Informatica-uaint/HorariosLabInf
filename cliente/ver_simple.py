@@ -30,7 +30,7 @@ Window.resizable = False
 
 # Configuracion de la API para QR
 API_CONFIG = {
-    'base_url': 'https://acceso.informaticauaint.com/api-lector',
+    'base_url': 'https://api.acceso.informaticauaint.com/api-lector',
     'timeout': 15,
     'verify_ssl': False,
     'headers': {

@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, FlatList, RefreshControl, TouchableOpacity, Scr
 import { Platform } from 'react-native';
 
 // Usar HTTPS para todas las conexiones API
-const API_BASE = 'https://acceso.informaticauaint.com/api/ayudantes';
+const API_BASE = 'https://api.acceso.informaticauaint.com/api/ayudantes';
 
 export default function RegistrosScreen() {
   const [registros, setRegistros] = useState([]);

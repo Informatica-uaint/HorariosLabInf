@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 const { width, height } = Dimensions.get('window');
 
 // Configuración de la API
-const API_BASE_URL = 'https://acceso.informaticauaint.com/api/lector';
+const API_BASE_URL = 'https://api.acceso.informaticauaint.com/api/lector';
 
 interface ScanResult {
   success: boolean;

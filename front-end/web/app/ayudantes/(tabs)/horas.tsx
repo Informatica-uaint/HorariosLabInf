@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 
 // ✅ CORRECCIÓN 1: Cambiar API_BASE
-const API_BASE = 'https://acceso.informaticauaint.com/api';
+const API_BASE = 'https://api.acceso.informaticauaint.com/api';
 
 export default function HorasAcumuladasScreen() {
   const [horasData, setHorasData] = useState([]);
