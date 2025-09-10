@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 
-// ✅ CORRECCIÓN 1: Cambiar API_BASE
-const API_BASE = 'https://api.acceso.informaticauaint.com/api';
+// Importar configuración unificada
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 export default function HorasAcumuladasScreen() {
   const [horasData, setHorasData] = useState([]);
@@ -17,10 +17,9 @@ export default function HorasAcumuladasScreen() {
     setLoading(true);
     setError(null);
     
-    // ✅ CORRECCIÓN 2: Usar el endpoint correcto
-    console.log("Cargando datos desde:", `${API_BASE}/ayudantes/horas_acumuladas`);
+    console.log("Cargando datos desde:", API_ENDPOINTS.AYUDANTES.HORAS);
     
-    fetch(`${API_BASE}/ayudantes/horas_acumuladas`, {
+    fetch(API_ENDPOINTS.AYUDANTES.HORAS, {
       // ✅ CORRECCIÓN 3: Platform ya está importado arriba
       ...(Platform.OS === 'web' ? {} : { headers: { 'Cache-Control': 'no-cache' } })
     })

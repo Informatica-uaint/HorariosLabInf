@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, RefreshControl, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { Platform } from 'react-native';
 
-// Usar HTTPS para todas las conexiones API
-const API_BASE = 'https://api.acceso.informaticauaint.com/api/ayudantes';
+// Importar configuración unificada
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 export default function RegistrosScreen() {
   const [registros, setRegistros] = useState([]);
@@ -20,7 +20,7 @@ export default function RegistrosScreen() {
     setLoading(true);
     setError(null);
     
-    fetch(`${API_BASE}/registros_hoy`)
+    fetch(API_ENDPOINTS.AYUDANTES.REGISTROS + "_hoy")
       .then(res => {
         if (!res.ok) {
           throw new Error(`Error ${res.status}: ${res.statusText || 'Error del servidor'}`);

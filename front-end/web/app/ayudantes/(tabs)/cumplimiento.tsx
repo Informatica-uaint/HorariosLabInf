@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 const Cumplimiento = () => {
   const [cumplimiento, setCumplimiento] = useState([]);
@@ -16,7 +17,7 @@ const Cumplimiento = () => {
     setLoading(true);
     setError(null);
     
-    fetch('https://api.acceso.informaticauaint.com/api/ayudantes/cumplimiento')
+    fetch(API_ENDPOINTS.AYUDANTES.CUMPLIMIENTO)
       .then(response => {
         if (!response.ok) {
           throw new Error('No se pudo conectar al servidor');

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, Platform, RefreshControl, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
 
 // Usar una constante directa para la URL de la API - con HTTPS
-const API_BASE = 'https://api.acceso.informaticauaint.com/api/ayudantes';
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 export default function AyudantesScreen() {
   const [ayudantes, setAyudantes] = useState([]);
@@ -17,9 +17,10 @@ export default function AyudantesScreen() {
     setLoading(true);
     setError(null);
     
-    console.log("Cargando datos desde:", `${API_BASE}/ayudantes_presentes`);
+    const endpoint = API_ENDPOINTS.AYUDANTES.BASE + "/ayudantes_presentes";
+    console.log("Cargando datos desde:", endpoint);
     
-    fetch(`${API_BASE}/ayudantes_presentes`)
+    fetch(endpoint)
       .then(res => {
         if (!res.ok) {
           throw new Error(`Error ${res.status}: ${res.statusText || 'Error del servidor'}`);

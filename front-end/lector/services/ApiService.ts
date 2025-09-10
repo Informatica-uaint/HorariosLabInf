@@ -1,4 +1,5 @@
 import { Config } from '@/constants/Config';
+import { API_ENDPOINTS } from '@/constants/ApiConfig';
 
 export interface QRData {
   name: string;
@@ -59,7 +60,7 @@ class ApiService {
   private timeout: number;
 
   constructor() {
-    this.baseURL = Config.API_BASE_URL;
+    this.baseURL = API_ENDPOINTS.QR.VALIDATE.replace('/validate-qr', ''); // Base URL sin endpoint específico
     this.timeout = Config.NETWORK.REQUEST_TIMEOUT;
   }
 
@@ -116,7 +117,7 @@ class ApiService {
         console.log('Validating QR:', qrData);
       }
 
-      const response = await this.fetchWithRetry(`${this.baseURL}/validate-qr`, {
+      const response = await this.fetchWithRetry(API_ENDPOINTS.QR.VALIDATE, {
         method: 'POST',
         body: JSON.stringify(qrData),
       });
@@ -142,7 +143,7 @@ class ApiService {
    */
   async getStats(): Promise<Stats> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseURL}/stats`);
+      const response = await this.fetchWithRetry(API_ENDPOINTS.QR.STATS);
       const result = await response.json();
 
       if (Config.LOGGING.ENABLE_CONSOLE_LOGS) {
@@ -167,7 +168,7 @@ class ApiService {
    */
   async getLastRecords(limit: number = 20): Promise<RecordsResponse> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseURL}/get-last-records?limit=${limit}`);
+      const response = await this.fetchWithRetry(`${API_ENDPOINTS.QR.RECORDS}?limit=${limit}`);
       const result = await response.json();
 
       if (Config.LOGGING.ENABLE_CONSOLE_LOGS) {
@@ -190,7 +191,7 @@ class ApiService {
    */
   async verifyStudent(email: string): Promise<any> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseURL}/verify-student`, {
+      const response = await this.fetchWithRetry(API_ENDPOINTS.QR.VERIFY_STUDENT, {
         method: 'POST',
         body: JSON.stringify({ email }),
       });
@@ -210,7 +211,7 @@ class ApiService {
    */
   async verifyHelper(email: string): Promise<any> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseURL}/verify-helper`, {
+      const response = await this.fetchWithRetry(API_ENDPOINTS.QR.VERIFY_HELPER, {
         method: 'POST',
         body: JSON.stringify({ email }),
       });
@@ -230,7 +231,7 @@ class ApiService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseURL}/health`);
+      const response = await this.fetchWithRetry(API_ENDPOINTS.HEALTH);
       const result = await response.json();
       return result.status === 'ok';
     } catch (error) {

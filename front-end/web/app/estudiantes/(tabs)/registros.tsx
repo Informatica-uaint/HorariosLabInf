@@ -18,7 +18,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
-const API_BASE = 'https://api.acceso.informaticauaint.com/api/estudiantes';
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 // Tipo para los datos de registro
 type Registro = {
@@ -62,14 +62,14 @@ export default function RegistrosScreen() {
   
     try {
       // Construir el endpoint según el filtro
-      let endpoint = `${API_BASE}/registros`;
+      let endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS;
     
       if (filter === 'hoy') {
-        endpoint = `${API_BASE}/registros_hoy`;
+        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_hoy';
       } else if (filter === 'semana') {
-        endpoint = `${API_BASE}/registros_semana`;
+        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_semana';
       } else if (filter === 'mes') {
-        endpoint = `${API_BASE}/registros_mes`;
+        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_mes';
       }
     
       const response = await fetch(endpoint);

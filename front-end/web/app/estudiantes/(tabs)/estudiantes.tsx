@@ -18,7 +18,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
-const API_BASE = 'https://api.acceso.informaticauaint.com/api/estudiantes';
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
 // Tipo para los datos de estudiante
 type Estudiante = {
@@ -58,7 +58,7 @@ export default function EstudiantesScreen() {
     setError(null);
   
     try {
-      const response = await fetch(`${API_BASE}/estudiantes_presentes/estudiantes`);
+      const response = await fetch(API_ENDPOINTS.ESTUDIANTES.BASE + '/estudiantes_presentes/estudiantes');
       if (!response.ok) {
         throw new Error('Error al cargar estudiantes');
       }
@@ -170,7 +170,7 @@ export default function EstudiantesScreen() {
   // Cambiar el estado de presencia de un estudiante
   const togglePresente = async (id: string, presente: boolean) => {
     try {
-      const response = await fetch(`${API_BASE}/estudiantes/${id}/presente`, {
+      const response = await fetch(`${API_ENDPOINTS.ESTUDIANTES.BASE}/estudiantes/${id}/presente`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

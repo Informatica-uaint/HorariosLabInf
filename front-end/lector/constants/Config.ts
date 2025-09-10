@@ -1,7 +1,7 @@
 // Configuración de la aplicación
 export const Config = {
-  // URL base de la API
-  API_BASE_URL: 'https://api.acceso.informaticauaint.com/api/lector',
+  // URL base de la API unificada
+  API_BASE_URL: 'https://acceso.informaticauaint.com/api/qr',
 
   // Clave de acceso para dispositivos autorizados
   // PIN numérico de 4 dígitos - Cambia por tu PIN deseado
