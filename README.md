@@ -15,13 +15,11 @@ The main architecture is based on Flask REST APIs that expose the data used by t
 [front-end (Expo)]        <--->  [back-end/web]
                            ^
                            |
-[cliente (Kivy desktop)] ---->  [back-end/lector]
-                                [back-end/api_estudiantes]
+[cliente (Kivy desktop)] ---->  [back-end/api_estudiantes]
 ```
 
 - `back-end/web` – Main API with authentication, schedules and other routes.
 - `back-end/api_estudiantes` – Dedicated API that provides student information and QR validation.
-- `back-end/lector` – Lightweight service for reading temporary QR codes.
 - `front-end` – Expo project containing the React Native mobile/web app. See its own `README.md` for development instructions.
 - `cliente` – Stand‑alone Kivy application that can read QR codes locally.
 - `static` – Repository of static assets such as images.
@@ -54,15 +52,6 @@ Each service expects an `.env` file with its configuration. The variables follow
    python -m venv venv && source venv/bin/activate  # optional
    pip install -r requirements.txt
    python run.py
-   ```
-
-3. **QR Reader API**
-
-   ```bash
-   cd back-end/lector
-   python -m venv venv && source venv/bin/activate  # optional
-   pip install Flask flask-cors PyMySQL gunicorn python-dotenv
-   python api_qr_temporal.py
    ```
 
    The commands above start each Flask service in development mode. Adjust the environment variables as needed for MySQL connectivity.

@@ -59,12 +59,10 @@ class TestRunner:
         
         potential_modules = [
             'test_estudiantes_api',
-            'test_ayudantes_api', 
-            'test_lector_api',
+            'test_ayudantes_api',
             # Legacy modules for backward compatibility
             'test_estudiantes',
-            'test_ayudantes',
-            'test_lector'
+            'test_ayudantes'
         ]
         
         for module_name in potential_modules:
@@ -234,8 +232,7 @@ class TestRunner:
         # Map friendly names to module names
         module_mapping = {
             'estudiantes': ['test_estudiantes_api', 'test_estudiantes'],
-            'ayudantes': ['test_ayudantes_api', 'test_ayudantes'],
-            'lector': ['test_lector_api', 'test_lector']
+            'ayudantes': ['test_ayudantes_api', 'test_ayudantes']
         }
         
         possible_modules = module_mapping.get(test_name, [f'test_{test_name}_api', f'test_{test_name}'])
@@ -393,14 +390,12 @@ def main():
             print("  python test_runner.py                    - Run all tests")
             print("  python test_runner.py estudiantes        - Run estudiantes API tests")
             print("  python test_runner.py ayudantes          - Run ayudantes API tests")
-            print("  python test_runner.py lector             - Run lector QR API tests")
             print("  python test_runner.py check-deps         - Check dependencies")
             print("  python test_runner.py junit              - Run all tests and generate XML")
             print("  python test_runner.py help               - Show this help")
             print("\nTest modules:")
             print("  - test_estudiantes_api.py  (Students API)")
             print("  - test_ayudantes_api.py    (Helpers API)")
-            print("  - test_lector_api.py       (QR Reader API)")
             return
         
         elif command == 'check-deps':
@@ -412,7 +407,7 @@ def main():
             runner.generate_junit_xml()
             sys.exit(0 if success else 1)
         
-        elif command in ['estudiantes', 'ayudantes', 'lector']:
+        elif command in ['estudiantes', 'ayudantes']:
             success = runner.run_specific_test(command)
             sys.exit(0 if success else 1)
         
