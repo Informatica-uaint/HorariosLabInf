@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Improved Test Runner for HorariosLabInf Back-end APIs
-Runs comprehensive unit tests for estudiantes, ayudantes, and lector APIs
+Runs comprehensive unit tests for estudiantes and ayudantes APIs
 """
 
 import unittest

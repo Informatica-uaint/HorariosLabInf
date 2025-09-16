@@ -58,7 +58,7 @@ export default function EstudiantesScreen() {
     setError(null);
   
     try {
-      const response = await fetch(API_ENDPOINTS.ESTUDIANTES.BASE + '/estudiantes_presentes/estudiantes');
+      const response = await fetch(API_ENDPOINTS.ESTUDIANTES.PRESENT);
       if (!response.ok) {
         throw new Error('Error al cargar estudiantes');
       }

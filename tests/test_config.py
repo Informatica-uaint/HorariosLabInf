@@ -19,13 +19,11 @@ PROJECT_ROOT = TESTS_DIR.parent
 # Back-end API paths
 ESTUDIANTES_PATH = PROJECT_ROOT / "back-end" / "estudiantes"
 AYUDANTES_PATH = PROJECT_ROOT / "back-end" / "ayudantes"
-LECTOR_PATH = PROJECT_ROOT / "back-end" / "lector"
 
 # Add paths to Python path for imports
 API_PATHS = [
     str(ESTUDIANTES_PATH),
-    str(AYUDANTES_PATH), 
-    str(LECTOR_PATH),
+    str(AYUDANTES_PATH),
     str(TESTS_DIR)
 ]
 
@@ -96,10 +94,6 @@ API_TEST_MODULES = {
     'ayudantes': [
         'test_ayudantes_api',
         'test_ayudantes'    # Fallback for legacy
-    ],
-    'lector': [
-        'test_lector_api',
-        'test_lector'       # Fallback for legacy
     ]
 }
 
@@ -220,8 +214,7 @@ def get_api_module_path(api_name):
     """Get the file system path for an API module"""
     path_mapping = {
         'estudiantes': ESTUDIANTES_PATH,
-        'ayudantes': AYUDANTES_PATH,
-        'lector': LECTOR_PATH
+        'ayudantes': AYUDANTES_PATH
     }
     return path_mapping.get(api_name)
 

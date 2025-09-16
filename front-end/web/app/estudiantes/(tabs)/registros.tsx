@@ -18,7 +18,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Constante para la URL de la API
-import { API_ENDPOINTS } from '../../../constants/ApiConfig';
+import { API_ENDPOINTS, API_CONFIG } from '../../../constants/ApiConfig';
 
 // Tipo para los datos de registro
 type Registro = {
@@ -63,13 +63,13 @@ export default function RegistrosScreen() {
     try {
       // Construir el endpoint según el filtro
       let endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS;
-    
+
       if (filter === 'hoy') {
-        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_hoy';
+        endpoint = `${API_CONFIG.BASE_URL}/estudiantes/registros_hoy`;
       } else if (filter === 'semana') {
-        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_semana';
+        endpoint = `${API_CONFIG.BASE_URL}/estudiantes/registros_semana`;
       } else if (filter === 'mes') {
-        endpoint = API_ENDPOINTS.ESTUDIANTES.REGISTROS + '_mes';
+        endpoint = `${API_CONFIG.BASE_URL}/estudiantes/registros_mes`;
       }
     
       const response = await fetch(endpoint);

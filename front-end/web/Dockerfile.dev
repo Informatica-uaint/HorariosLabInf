@@ -1,0 +1,37 @@
+# Dockerfile.dev - Frontend Web para desarrollo
+FROM node:18-alpine
+
+# Metadatos
+LABEL maintainer="acceso.informaticauaint.com"
+LABEL description="Frontend Web Expo para desarrollo"
+
+# Instalar dependencias del sistema
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git
+
+# Instalar Expo CLI globalmente
+RUN npm install -g @expo/cli
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY package*.json ./
+
+# Instalar dependencias
+RUN npm install
+
+# Copiar código fuente (se monta como volumen en desarrollo)
+COPY . .
+
+# Exponer puertos
+EXPOSE 8081 19000 19001 19002
+
+# Variables de entorno para desarrollo
+ENV EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+ENV NODE_ENV=development
+
+# Comando para desarrollo
+CMD ["npx", "expo", "start", "--web"]

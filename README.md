@@ -12,14 +12,13 @@ This repository contains the code for a small access control system used in the 
 The main architecture is based on Flask REST APIs that expose the data used by the clients. The Expo application communicates with these APIs. A simple Kivy client is also provided for local usage when running on a computer with a webcam.
 
 ```
-[front-end (Expo)]        <--->  [back-end/web]
-                           ^
+[front-end (Expo)]        <--->  [back-end]
+                           ^      (Unified API)
                            |
-[cliente (Kivy desktop)] ---->  [back-end/api_estudiantes]
+[cliente (Kivy desktop)] ------>
 ```
 
-- `back-end/web` – Main API with authentication, schedules and other routes.
-- `back-end/api_estudiantes` – Dedicated API that provides student information and QR validation.
+- `back-end` – Unified API with authentication, schedules, student management, QR validation, and all routes.
 - `front-end` – Expo project containing the React Native mobile/web app. See its own `README.md` for development instructions.
 - `cliente` – Stand‑alone Kivy application that can read QR codes locally.
 - `static` – Repository of static assets such as images.
@@ -32,40 +31,40 @@ The main architecture is based on Flask REST APIs that expose the data used by t
 
 Each service expects an `.env` file with its configuration. The variables follow the standard names seen in the source (`MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB`, `JWT_SECRET`, etc.).
 
-## Running the Back‑end Services
+## Running the Back‑end API
 
-1. **Main Web API**
+**Unified API (All Services)**
 
    ```bash
-   cd back-end/web
+   cd back-end
    python -m venv venv && source venv/bin/activate  # optional
    pip install -r requirements.txt
    python app.py
    ```
 
-   By default it listens on `https://localhost:5000` using the SSL certificates found in the directory. In production `gunicorn` can be used as shown in the `Dockerfile`.
+   By default it listens on `https://localhost:5001` using the SSL certificates found in the directory. In production `gunicorn` can be used as shown in the `Dockerfile`.
 
-2. **Student API**
-
-   ```bash
-   cd back-end/api_estudiantes
-   python -m venv venv && source venv/bin/activate  # optional
-   pip install -r requirements.txt
-   python run.py
-   ```
-
-   The commands above start each Flask service in development mode. Adjust the environment variables as needed for MySQL connectivity.
+   The unified API provides all endpoints:
+   - `/api/auth/*` - Authentication and user management
+   - `/api/estudiantes/*` - Student management
+   - `/api/qr/*` - QR code validation and generation
+   - `/api/registros/*` - Access record management
+   - `/api/horarios/*` - Schedule management
+   - `/api/cumplimiento/*` - Compliance tracking
+   - `/api/horas/*` - Hour tracking
+   - `/api/estado/*` - Status management
+   - `/api/health` - Health check
 
 ## Running the Expo Front‑end
 
 ```bash
-cd front-end
+cd front-end/web
 npm install
 npx expo start
 ```
 
 Open the QR code displayed in the terminal with the Expo Go mobile application or use a simulator/emulator.
-See `front-end/README.md` for additional details.
+See `front-end/web/README.md` for additional details.
 
 ## Optional Local Client
 
@@ -76,7 +75,7 @@ cd cliente
 python ver.py
 ```
 
-It will open a simple GUI that uses the webcam to scan QR codes and communicates with the back‑end.
+It will open a simple GUI that uses the webcam to scan QR codes and communicates with the unified back‑end API.
 
 ---
 

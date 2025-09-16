@@ -17,7 +17,7 @@ export default function AyudantesScreen() {
     setLoading(true);
     setError(null);
     
-    const endpoint = API_ENDPOINTS.AYUDANTES.BASE + "/ayudantes_presentes";
+    const endpoint = API_ENDPOINTS.AYUDANTES.PRESENT;
     console.log("Cargando datos desde:", endpoint);
     
     fetch(endpoint)
