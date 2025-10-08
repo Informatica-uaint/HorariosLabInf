@@ -37,8 +37,15 @@ def create_app():
     # Configuración
     app.config.from_object(Config)
     
-    # CORS
-    CORS(app)
+    # CORS - Configuración desde variable de entorno
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": Config.CORS_ORIGINS,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
     
     # Configurar JSON encoder personalizado
     app.json_provider_class = CustomJSONProvider
