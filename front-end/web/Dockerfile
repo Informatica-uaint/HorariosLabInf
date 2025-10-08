@@ -1,61 +1,41 @@
 # ============================================
-# Stage 1: Dependencies - Instalación de dependencias
+# Stage 1: Builder - Build de la aplicación
 # ============================================
-FROM node:18-alpine AS dependencies
-
-# Variables de entorno
-ENV NODE_ENV=production \
-    NPM_CONFIG_LOGLEVEL=warn
-
-# Instalar solo dependencias mínimas necesarias
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++
-
-# Crear directorio de trabajo
-WORKDIR /app
-
-# Copiar solo archivos de dependencias para aprovechar cache de Docker
-COPY package.json package-lock.json* ./
-
-# Instalar dependencias con npm ci (más rápido y determinístico)
-RUN npm ci --only=production --prefer-offline --no-audit
-
-# ============================================
-# Stage 2: Builder - Build de la aplicación
-# ============================================
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Metadatos
 LABEL maintainer="acceso.informaticauaint.com"
 LABEL description="Frontend Web para sistema de acceso QR"
 
 # Variables de entorno para el build
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NPM_CONFIG_LOGLEVEL=warn
 
 # Instalar dependencias del sistema y Expo CLI
-RUN apk add --no-cache git && \
+RUN apk add --no-cache \
+    git \
+    python3 \
+    make \
+    g++ && \
     npm install -g @expo/cli@latest
 
 # Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar dependencias desde stage anterior
-COPY --from=dependencies /app/node_modules ./node_modules
-
-# Copiar archivos de configuración y código fuente
+# Copiar archivos de dependencias para aprovechar cache de Docker
 COPY package.json package-lock.json* ./
-COPY . .
 
-# Asegurar que las dependencias de Expo estén correctas
-RUN npx expo install --fix
+# Instalar TODAS las dependencias (prod + dev) necesarias para el build
+RUN npm ci --prefer-offline --no-audit
+
+# Copiar el resto del código fuente
+COPY . .
 
 # Exportar la aplicación para web (genera archivos estáticos optimizados)
 RUN npx expo export -p web --output-dir dist
 
 # ============================================
-# Stage 3: Production - Servidor Nginx optimizado
+# Stage 2: Production - Servidor Nginx optimizado
 # ============================================
 FROM nginx:alpine AS production
 
