@@ -66,12 +66,12 @@ RUN addgroup -g 101 -S nginx 2>/dev/null || true && \
 # Cambiar a usuario no-root
 USER nginx
 
-# Exponer puerto 80
-EXPOSE 80
+# Exponer puerto 8080 (no privilegiado)
+EXPOSE 8080
 
 # Health check para verificar que Nginx está funcionando
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD curl -f http://localhost:8080/ || exit 1
 
 # Comando para ejecutar Nginx
 CMD ["nginx", "-g", "daemon off;"]
