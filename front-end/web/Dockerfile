@@ -7,9 +7,13 @@ FROM node:20-alpine AS builder
 LABEL maintainer="acceso.informaticauaint.com"
 LABEL description="Frontend Web para sistema de acceso QR"
 
+# Build-time argument for API URL
+ARG EXPO_PUBLIC_API_URL=http://localhost:5000/api
+
 # Variables de entorno para el build
 ENV NODE_ENV=production \
-    NPM_CONFIG_LOGLEVEL=warn
+    NPM_CONFIG_LOGLEVEL=warn \
+    EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}
 
 # Instalar dependencias del sistema y Expo CLI
 RUN apk add --no-cache \
@@ -32,6 +36,7 @@ RUN npm ci --prefer-offline --no-audit
 COPY . .
 
 # Exportar la aplicación para web (genera archivos estáticos optimizados)
+# La variable EXPO_PUBLIC_API_URL será embebida en el build
 RUN npx expo export -p web --output-dir dist
 
 # ============================================

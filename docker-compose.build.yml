@@ -80,6 +80,8 @@ services:
       context: ./front-end/web
       dockerfile: Dockerfile
       target: production
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:5000/api}
     image: horarios_frontend:${IMAGE_TAG:-latest}
     container_name: horarios_frontend_prod
     restart: unless-stopped
