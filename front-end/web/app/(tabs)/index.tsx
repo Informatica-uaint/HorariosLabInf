@@ -1,20 +1,24 @@
 // app/(tabs)/index.tsx
 import React from 'react';
 import {
+  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-const { width } = Dimensions.get('window');
-
 export default function PortalSelector() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const safeWidth = width > 0 ? width : 360;
+  const cardWidth = Math.min(safeWidth - 32, 520);
+  const isCompact = safeWidth < 400;
 
   const navigateToEstudiantes = () => {
     router.push('/estudiantes');
@@ -25,75 +29,96 @@ export default function PortalSelector() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Sistema de Control de Acceso</Text>
-        <Text style={styles.subtitle}>Laboratorio de Informática</Text>
-        <Text style={styles.description}>
-          Selecciona el portal correspondiente para acceder al sistema
-        </Text>
-      </View>
-
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity 
-          style={[styles.portalButton, styles.estudiantesButton]}
-          onPress={navigateToEstudiantes}
-          activeOpacity={0.8}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="school-outline" size={60} color="white" />
-          </View>
-          <Text style={styles.buttonTitle}>Portal Estudiantes</Text>
-          <Text style={styles.buttonDescription}>
-            Generación de QR, consulta de estudiantes y registros de acceso
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.title, isCompact && styles.titleCompact]}>
+            Sistema de Control de Acceso
           </Text>
-          <View style={styles.arrowContainer}>
-            <Ionicons name="arrow-forward" size={24} color="white" />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.portalButton, styles.ayudantesButton]}
-          onPress={navigateToAyudantes}
-          activeOpacity={0.8}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="people-outline" size={60} color="white" />
-          </View>
-          <Text style={styles.buttonTitle}>Portal Ayudantes</Text>
-          <Text style={styles.buttonDescription}>
-            QR de ayudantes, registros, cumplimiento y control de horas
+          <Text style={styles.subtitle}>Laboratorio de Informática</Text>
+          <Text style={styles.description}>
+            Selecciona el portal correspondiente para acceder al sistema
           </Text>
-          <View style={styles.arrowContainer}>
-            <Ionicons name="arrow-forward" size={24} color="white" />
-          </View>
-        </TouchableOpacity>
-      </View>
+        </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Universidad Adolfo Ibañez - Facultad de Ciencias
-        </Text>
-        <Text style={styles.footerSubtext}>
-          Departamento de informatica
-        </Text>
-      </View>
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.portalButton,
+              styles.estudiantesButton,
+              { width: cardWidth },
+            ]}
+            onPress={navigateToEstudiantes}
+            activeOpacity={0.8}
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons name="school-outline" size={60} color="white" />
+            </View>
+            <Text style={styles.buttonTitle}>Portal Estudiantes</Text>
+            <Text style={styles.buttonDescription}>
+              Generación de QR, consulta de estudiantes y registros de acceso
+            </Text>
+            <View style={styles.arrowContainer}>
+              <Ionicons name="arrow-forward" size={24} color="white" />
+            </View>
+          </TouchableOpacity>
 
-      <StatusBar style="light" />
-    </View>
+          <TouchableOpacity 
+            style={[
+              styles.portalButton,
+              styles.ayudantesButton,
+              { width: cardWidth },
+            ]}
+            onPress={navigateToAyudantes}
+            activeOpacity={0.8}
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons name="people-outline" size={60} color="white" />
+            </View>
+            <Text style={styles.buttonTitle}>Portal Ayudantes</Text>
+            <Text style={styles.buttonDescription}>
+              QR de ayudantes, registros, cumplimiento y control de horas
+            </Text>
+            <View style={styles.arrowContainer}>
+              <Ionicons name="arrow-forward" size={24} color="white" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Universidad Adolfo Ibañez - Facultad de Ciencias
+          </Text>
+          <Text style={styles.footerSubtext}>
+            Departamento de informatica
+          </Text>
+        </View>
+
+      </ScrollView>
+      <StatusBar style="dark" />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f5f7fa',
+  },
+  container: {
+    flexGrow: 1,
     paddingHorizontal: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
   },
   header: {
     alignItems: 'center',
     paddingTop: 40,
     paddingBottom: 20,
+    width: '100%',
   },
   title: {
     fontSize: 28,
@@ -101,6 +126,9 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     textAlign: 'center',
     marginBottom: 8,
+  },
+  titleCompact: {
+    fontSize: 24,
   },
   subtitle: {
     fontSize: 18,
@@ -116,16 +144,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   buttonsContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    width: '100%',
     alignItems: 'center',
-    gap: 30,
+    paddingVertical: 20,
   },
   portalButton: {
-    width: width - 40,
     minHeight: 180,
     borderRadius: 20,
-    padding: 30,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -137,6 +164,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     position: 'relative',
+    marginBottom: 24,
   },
   estudiantesButton: {
     backgroundColor: '#3498db',

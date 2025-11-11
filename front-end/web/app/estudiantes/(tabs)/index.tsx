@@ -324,7 +324,7 @@ export default function QRGeneratorScreen() {
           </View>
         )}
       </View>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </ScrollView>
   );
 }

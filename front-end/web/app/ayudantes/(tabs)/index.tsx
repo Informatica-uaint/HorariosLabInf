@@ -274,7 +274,7 @@ export default function QRGenerator() {
           )}
         </View>
       )}
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </View>
   );
 }
