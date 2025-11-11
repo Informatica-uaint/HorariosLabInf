@@ -1,11 +1,13 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function EstudiantesTabLayout() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const hideLabels = width < 392;
 
   const HeaderBackButton = () => (
     <TouchableOpacity
@@ -19,7 +21,7 @@ export default function EstudiantesTabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'help-outline';
 
           if (route.name === 'index') {
@@ -33,7 +35,19 @@ export default function EstudiantesTabLayout() {
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#3498db',
-        tabBarInactiveTintColor: 'gray',
+        tabBarInactiveTintColor: '#7f8c8d',
+        tabBarShowLabel: !hideLabels,
+        tabBarLabelStyle: {
+          fontSize: hideLabels ? 0 : 11,
+        },
+        tabBarItemStyle: {
+          minWidth: hideLabels ? 64 : 82,
+        },
+        tabBarStyle: {
+          height: hideLabels ? 58 : 66,
+          paddingVertical: hideLabels ? 4 : 8,
+        },
+        tabBarHideOnKeyboard: true,
         headerStyle: {
           backgroundColor: '#3498db',
         },
