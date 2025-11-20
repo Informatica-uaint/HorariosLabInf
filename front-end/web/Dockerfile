@@ -8,7 +8,7 @@ LABEL maintainer="acceso.informaticauaint.com"
 LABEL description="Frontend Web para sistema de acceso QR"
 
 # Build-time argument for API URL
-ARG EXPO_PUBLIC_API_URL=http://localhost:5000/api
+ARG EXPO_PUBLIC_API_URL=https://api.lector.lab.informaticauaint.com/api
 
 # Variables de entorno para el build
 ENV NODE_ENV=production \
