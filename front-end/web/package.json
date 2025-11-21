@@ -38,6 +38,7 @@
     "react-native-screens": "3.31.1",
     "react-native-svg": "15.2.0",
     "react-native-web": "~0.19.10",
+    "@zxing/browser": "^0.1.5",
     "yest": "^0.0.1"
   },
   "devDependencies": {

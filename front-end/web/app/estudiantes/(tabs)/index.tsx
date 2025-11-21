@@ -29,6 +29,7 @@ export default function EstudiantesScan() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanInterval = useRef<NodeJS.Timeout | null>(null);
   const [webError, setWebError] = useState('');
+  const readerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!isWeb) {
@@ -110,11 +111,6 @@ export default function EstudiantesScan() {
     if (!isWeb || typeof window === 'undefined') return;
     // @ts-ignore
     const BarcodeDetector = (window as any).BarcodeDetector;
-    if (!BarcodeDetector) {
-      setWebError('El navegador no soporta BarcodeDetector. Usa la app móvil o pega el token.');
-      return;
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
@@ -123,20 +119,41 @@ export default function EstudiantesScan() {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
       }
-      const detector = new BarcodeDetector({ formats: ['qr_code'] });
-      scanInterval.current = setInterval(async () => {
-        if (!videoRef.current) return;
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes && codes.length > 0) {
-            const value = codes[0].rawValue;
-            stopWebScanner();
-            submitAccess(value);
+
+      if (BarcodeDetector) {
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        scanInterval.current = setInterval(async () => {
+          if (!videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes && codes.length > 0) {
+              const value = codes[0].rawValue;
+              stopWebScanner();
+              submitAccess(value);
+            }
+          } catch {
+            // silencioso
           }
-        } catch (err) {
-          // Silenciar errores de detección frecuentes
-        }
-      }, 500);
+        }, 400);
+      } else {
+        // Fallback con ZXing para navegadores sin BarcodeDetector
+        const { BrowserMultiFormatReader, NotFoundException } = await import('@zxing/browser');
+        const reader = new BrowserMultiFormatReader();
+        readerRef.current = reader;
+        reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current as any,
+          (result, err) => {
+            if (result?.getText()) {
+              stopWebScanner();
+              submitAccess(result.getText());
+            }
+            if (err && !(err instanceof NotFoundException)) {
+              // otros errores se ignoran en bucle
+            }
+          }
+        );
+      }
     } catch (err: any) {
       setWebError(err?.message || 'No se pudo acceder a la cámara');
     }
@@ -146,6 +163,14 @@ export default function EstudiantesScan() {
     if (scanInterval.current) {
       clearInterval(scanInterval.current);
       scanInterval.current = null;
+    }
+    if (readerRef.current) {
+      try {
+        readerRef.current.reset();
+      } catch (e) {
+        // ignore
+      }
+      readerRef.current = null;
     }
     if (videoRef.current?.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
