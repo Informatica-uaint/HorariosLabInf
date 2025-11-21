@@ -11,6 +11,8 @@ class Config:
     
     # JWT
     JWT_SECRET = os.getenv('JWT_SECRET')
+    READER_QR_SECRET = os.getenv('READER_QR_SECRET')
+    READER_STATION_ID = os.getenv('READER_STATION_ID', 'lector-web')
     
     # Base de datos
     DB_HOST = os.getenv('DB_HOST')

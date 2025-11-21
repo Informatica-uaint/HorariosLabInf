@@ -17,6 +17,7 @@ from routes.horarios import horarios_bp
 from routes.cumplimiento import cumplimiento_bp
 from routes.horas import horas_bp
 from routes.estado import estado_bp
+from routes.lector import lector_bp
 
 # Importar tareas programadas
 from tasks.scheduled_tasks import configurar_tarea_cierre_diario, configurar_reinicio_semanal
@@ -47,6 +48,7 @@ def create_app():
     app.register_blueprint(cumplimiento_bp)
     app.register_blueprint(horas_bp)
     app.register_blueprint(estado_bp)
+    app.register_blueprint(lector_bp, url_prefix='/api')
     
     return app
 

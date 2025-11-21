@@ -1,278 +1,177 @@
-// app/index.tsx (QR Generator Screen)
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TextInput, Button, Platform, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import QRCode from 'react-native-qrcode-svg';
+import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { StatusBar } from 'expo-status-bar';
 
-const API_BASE = Platform.OS === 'web'
-  ? 'http://10.0.3.54:5000'
-  : 'http://10.0.3.54:8081'; // Replace if using Expo Go on mobile
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE || 'http://10.0.3.54:5000/api';
 
-export default function QRGenerator() {
+type AccessResult = {
+  success: boolean;
+  message: string;
+  tipo?: string;
+  estado?: string;
+  station_id?: string;
+};
+
+export default function ScanReaderToken() {
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
-  const [savedUsers, setSavedUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [autoRenewal, setAutoRenewal] = useState(false);
-  const [renewInterval, setRenewInterval] = useState(null);
-  const [qrExpired, setQrExpired] = useState(false);
-  
+  const [loading, setLoading] = useState(false);
+  const [lastResult, setLastResult] = useState<AccessResult | null>(null);
+
   useEffect(() => {
-    loadSavedUsers();
-    return () => {
-      if (renewInterval) clearInterval(renewInterval);
-    };
+    requestPermission();
+    hydrateUser();
   }, []);
 
-  const loadSavedUsers = async () => {
-    try {
-      const storedUsers = await AsyncStorage.getItem('savedUsers');
-      if (storedUsers !== null) {
-        setSavedUsers(JSON.parse(storedUsers));
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
+  const requestPermission = async () => {
+    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    setHasPermission(status === 'granted');
+  };
+
+  const hydrateUser = async () => {
+    const stored = await AsyncStorage.getItem('savedUser');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setName(parsed.name || '');
+      setSurname(parsed.surname || '');
+      setEmail(parsed.email || '');
     }
   };
 
-  const saveUser = async () => {
-    if (name.trim() === '' || surname.trim() === '' || email.trim() === '' || !email.includes('@')) {
-      alert('Please enter valid data');
+  const persistUser = async () => {
+    await AsyncStorage.setItem('savedUser', JSON.stringify({ name, surname, email }));
+  };
+
+  const handleBarCodeScanned = async ({ data }: BarCodeScannerResult) => {
+    setScanning(false);
+    if (!data) return;
+    persistUser().catch(() => null);
+    submitAccess(data);
+  };
+
+  const submitAccess = async (token: string) => {
+    if (!name || !surname || !email) {
+      Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo antes de escanear.');
       return;
     }
 
-    const timestamp = Date.now();
-    const userData = { 
-      name, 
-      surname, 
-      email, 
-      timestamp, 
-      expired: false 
-    };
-
+    setLoading(true);
+    setLastResult(null);
     try {
-      const newUsers = [...savedUsers, userData];
-      await AsyncStorage.setItem('savedUsers', JSON.stringify(newUsers));
-      setSavedUsers(newUsers);
-      setSelectedUser(userData);
-      setQrExpired(false);
-
-      // Clear any existing interval
-      if (renewInterval) {
-        clearInterval(renewInterval);
-        setRenewInterval(null);
-      }
-
-      // Set up auto-renewal or QR expiry
-      if (autoRenewal) {
-        const interval = setInterval(() => {
-          const newTimestamp = Date.now();
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            timestamp: newTimestamp,
-            expired: false
-          }));
-        }, 14000); // Renew every 14 seconds
-        setRenewInterval(interval);
-      } else {
-        // Set expiration after 15 seconds
-        setTimeout(() => {
-          setQrExpired(true);
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            expired: true
-          }));
-        }, 15000);
-      }
-
-      setName('');
-      setSurname('');
-      setEmail('');
-    } catch (error) {
-      console.error('Error saving user:', error);
-    }
-  };
-
-  const toggleAutoRenewal = () => {
-    const newAutoRenewal = !autoRenewal;
-    setAutoRenewal(newAutoRenewal);
-    
-    // Clear any existing interval
-    if (renewInterval) {
-      clearInterval(renewInterval);
-      setRenewInterval(null);
-    }
-
-    if (selectedUser) {
-      if (newAutoRenewal) {
-        // Activate auto-renewal
-        const interval = setInterval(() => {
-          const newTimestamp = Date.now();
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            timestamp: newTimestamp,
-            expired: false
-          }));
-          setQrExpired(false);
-        }, 14000);
-        setRenewInterval(interval);
-      } else if (qrExpired) {
-        // Already expired, keep it that way
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          expired: true
-        }));
-      } else {
-        // Set expiration after 15 seconds
-        setTimeout(() => {
-          setQrExpired(true);
-          setSelectedUser(prevUser => {
-            if (prevUser) {
-              return {
-                ...prevUser,
-                expired: true
-              };
-            }
-            return null;
-          });
-        }, 15000);
-      }
-    }
-  };
-
-  const selectSavedUser = (user) => {
-    // Clear any existing interval
-    if (renewInterval) {
-      clearInterval(renewInterval);
-      setRenewInterval(null);
-    }
-    
-    setName(user.name);
-    setSurname(user.surname);
-    setEmail(user.email);
-    
-    // When selecting an existing user, generate a new QR with current timestamp
-    const timestamp = Date.now();
-    const updatedUser = { ...user, timestamp, expired: false };
-    setSelectedUser(updatedUser);
-    setQrExpired(false);
-    
-    // Configure expiration or auto-renewal
-    if (autoRenewal) {
-      const interval = setInterval(() => {
-        const newTimestamp = Date.now();
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          timestamp: newTimestamp,
-          expired: false
-        }));
-      }, 14000);
-      setRenewInterval(interval);
-    } else {
-      setTimeout(() => {
-        setQrExpired(true);
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          expired: true
-        }));
-      }, 15000);
-    }
-  };
-
-  // Generate QR value as a valid JSON object with proper encoding
-  const generateQrValue = () => {
-    if (!selectedUser) return JSON.stringify({});
-  
-    // Ensure proper string encoding by removing trailing spaces and normalizing text
-    const sanitizedUser = {
-      name: selectedUser.name.trim(),
-      surname: selectedUser.surname.trim(),
-      email: selectedUser.email.trim(),
-      timestamp: selectedUser.timestamp
-    };
-  
-    // Add additional properties based on state
-    if (qrExpired && !autoRenewal) {
-      return JSON.stringify({
-        ...sanitizedUser,
-        expired: true,
-        status: "EXPIRED"
+      const response = await fetch(`${API_BASE}/lector/validar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          nombre: name.trim(),
+          apellido: surname.trim(),
+          email: email.trim()
+        })
       });
+
+      const result = await response.json();
+
+      setLastResult(result);
+      if (!response.ok) {
+        const message = result?.error || 'No se pudo registrar el acceso';
+        Alert.alert('Acceso denegado', message);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No se pudo contactar al servidor');
+    } finally {
+      setLoading(false);
+      // Permitir un nuevo escaneo tras completar ciclo
+      setScanning(true);
     }
-  
-    if (autoRenewal) {
-      return JSON.stringify({
-        ...sanitizedUser,
-        timestamp: Date.now(),
-        autoRenewal: true,
-        status: "VALID"
-      });
-    }
-  
-    return JSON.stringify({
-      ...sanitizedUser,
-      status: "VALID"
-    });
   };
+
+  if (hasPermission === null) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.muted}>Solicitando permiso de cámara...</Text>
+      </View>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Permiso de cámara denegado.</Text>
+        <Text style={styles.muted}>Habilita la cámara para escanear el QR del lector.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>QR Generator</Text>
-      <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Surname" value={surname} onChangeText={setSurname} />
-      <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-      
-      <View style={styles.optionsRow}>
-        <Button title="Generate QR" onPress={saveUser} />
-        <TouchableOpacity onPress={toggleAutoRenewal} style={[styles.checkboxContainer, autoRenewal && styles.checkboxChecked]}>
-          <Text style={styles.checkboxText}>Auto-renew QR</Text>
+      <StatusBar style="light" />
+      <Text style={styles.title}>Escanea el QR del lector</Text>
+      <Text style={styles.subtitle}>Valida tus credenciales escaneando el código que muestra el lector.</Text>
+
+      <View style={styles.form}>
+        <TextInput
+          placeholder="Nombre"
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+        />
+        <TextInput
+          placeholder="Apellido"
+          style={styles.input}
+          value={surname}
+          onChangeText={setSurname}
+          autoCapitalize="words"
+        />
+        <TextInput
+          placeholder="Correo institucional"
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <TouchableOpacity style={styles.button} onPress={() => setScanning(true)}>
+          <Text style={styles.buttonText}>Abrir cámara</Text>
         </TouchableOpacity>
       </View>
 
-      {savedUsers.length > 0 && (
-        <ScrollView horizontal style={styles.userList}>
-          {savedUsers.map((user, idx) => (
-            <TouchableOpacity 
-              key={idx} 
-              style={styles.userItem}
-              onPress={() => selectSavedUser(user)}
-            >
-              <Text style={styles.userItemText}>{user.name} {user.surname}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <View style={styles.scannerContainer}>
+        {scanning ? (
+          <BarCodeScanner
+            onBarCodeScanned={handleBarCodeScanned}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.muted}>Pulsa "Abrir cámara" para escanear</Text>
+          </View>
+        )}
+      </View>
+
+      {loading && (
+        <View style={styles.statusBox}>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.statusText}>Validando acceso...</Text>
+        </View>
       )}
 
-      {selectedUser && (
-        <View style={styles.qrContainer}>
-          <Text style={[
-            styles.userText, 
-            (qrExpired && !autoRenewal) ? styles.expiredText : styles.validText
-          ]}>
-            {(qrExpired && !autoRenewal) 
-              ? 'Expired QR' 
-              : `${selectedUser.name} ${selectedUser.surname} - ${selectedUser.email}`
-            }
+      {lastResult && (
+        <View style={[styles.statusBox, lastResult.success ? styles.success : styles.error]}>
+          <Text style={styles.statusTitle}>
+            {lastResult.success ? `Acceso ${lastResult.tipo || 'registrado'}` : 'Acceso denegado'}
           </Text>
-          <QRCode
-            value={generateQrValue()}
-            size={200}
-            backgroundColor="white"
-            color={(qrExpired && !autoRenewal) ? "#cccccc" : "black"}
-          />
-          {autoRenewal && (
-            <Text style={styles.renewalText}>QR with active automatic renewal</Text>
-          )}
-          {!autoRenewal && !qrExpired && (
-            <Text style={styles.expirationText}>
-              This QR will expire in 15 seconds
-            </Text>
+          <Text style={styles.statusText}>{lastResult.message || lastResult.error}</Text>
+          {lastResult.station_id && (
+            <Text style={styles.statusText}>Estación: {lastResult.station_id}</Text>
           )}
         </View>
       )}
-      <StatusBar style="auto" />
     </View>
   );
 }
@@ -280,90 +179,90 @@ export default function QRGenerator() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0f172a',
     padding: 20,
+    gap: 12
   },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#e2e8f0',
+    fontSize: 24,
+    fontWeight: '700'
+  },
+  subtitle: {
+    color: '#94a3b8',
+    fontSize: 14
+  },
+  form: {
+    gap: 10
   },
   input: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-    backgroundColor: 'white',
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    backgroundColor: 'white',
-  },
-  checkboxChecked: {
-    backgroundColor: '#e6f7ff',
-    borderColor: '#1890ff',
-  },
-  checkboxText: {
-    marginLeft: 5,
-  },
-  userList: {
-    maxHeight: 50,
-    marginVertical: 10,
-  },
-  userItem: {
-    padding: 10,
-    marginRight: 10,
-    backgroundColor: '#e6f7ff',
-    borderRadius: 5,
-  },
-  userItemText: {
-    color: '#1890ff',
-  },
-  qrContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-    padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: '#1e293b',
+    color: '#e2e8f0',
+    padding: 12,
     borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#334155'
   },
-  userText: {
+  button: {
+    marginTop: 4,
+    backgroundColor: '#2563eb',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  buttonText: {
+    color: '#e2e8f0',
+    fontWeight: '600'
+  },
+  scannerContainer: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1e293b'
+  },
+  placeholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  statusBox: {
+    backgroundColor: '#1e293b',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 4
+  },
+  statusText: {
+    color: '#cbd5e1'
+  },
+  statusTitle: {
+    color: '#e2e8f0',
+    fontWeight: '700',
+    fontSize: 16
+  },
+  success: {
+    borderColor: '#22c55e'
+  },
+  error: {
+    borderColor: '#f87171'
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+    padding: 20,
+    gap: 10
+  },
+  muted: {
+    color: '#94a3b8'
+  },
+  errorText: {
+    color: '#fca5a5',
     fontSize: 16,
-    marginBottom: 15,
-    fontWeight: '500',
-  },
-  expiredText: {
-    color: '#ff4d4f',
-  },
-  validText: {
-    color: '#52c41a',
-  },
-  renewalText: {
-    marginTop: 10,
-    color: '#1890ff',
-    fontStyle: 'italic',
-  },
-  expirationText: {
-    marginTop: 10,
-    color: '#999',
-    fontStyle: 'italic',
-  },
+    fontWeight: '600'
+  }
 });
