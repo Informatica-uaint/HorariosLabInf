@@ -25,6 +25,7 @@ export default function AyudantesScan() {
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<AccessResult | null>(null);
   const [manualToken, setManualToken] = useState('');
+  const [step, setStep] = useState<'form' | 'scan'>('form');
   const isWeb = Platform.OS === 'web';
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanInterval = useRef<NodeJS.Timeout | null>(null);
@@ -36,11 +37,18 @@ export default function AyudantesScan() {
       requestPermission();
     } else {
       setHasPermission(true);
-      startWebScanner();
     }
     hydrateUser();
     return () => stopWebScanner();
   }, [isWeb]);
+
+  useEffect(() => {
+    if (isWeb && step === 'scan') {
+      startWebScanner();
+    } else {
+      stopWebScanner();
+    }
+  }, [isWeb, step]);
 
   const requestPermission = async () => {
     const { status } = await BarCodeScanner.requestPermissionsAsync();
@@ -105,6 +113,24 @@ export default function AyudantesScan() {
       setLoading(false);
       setScanning(true);
     }
+  };
+
+  const goToScan = async () => {
+    if (!name || !surname || !email) {
+      Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo.');
+      return;
+    }
+    await persistUser();
+    setStep('scan');
+    if (!isWeb) {
+      setScanning(true);
+    }
+  };
+
+  const backToForm = () => {
+    stopWebScanner();
+    setScanning(false);
+    setStep('form');
   };
 
   const startWebScanner = async () => {
@@ -197,79 +223,91 @@ export default function AyudantesScan() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <Text style={styles.title}>Escanea o ingresa el QR del lector</Text>
-      <Text style={styles.subtitle}>Portal Ayudantes: valida tus credenciales con el código mostrado por el lector.</Text>
+      <Text style={styles.title}>
+        {step === 'form' ? 'Ingresa tus datos' : 'Escanea el QR del lector'}
+      </Text>
+      <Text style={styles.subtitle}>
+        {step === 'form'
+          ? 'Portal Ayudantes: valida tus credenciales con el código mostrado por el lector.'
+          : 'Apunta la cámara al QR. Los datos se guardan para no reingresar cada vez.'}
+      </Text>
 
-      <View style={styles.form}>
-        <TextInput
-          placeholder="Nombre"
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Apellido"
-          style={styles.input}
-          value={surname}
-          onChangeText={setSurname}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Correo institucional"
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        {!isWeb && (
-          <TouchableOpacity style={styles.button} onPress={() => setScanning(true)}>
-            <Text style={styles.buttonText}>Abrir cámara</Text>
+      {step === 'form' ? (
+        <View style={styles.form}>
+          <TextInput
+            placeholder="Nombre"
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
+          <TextInput
+            placeholder="Apellido"
+            style={styles.input}
+            value={surname}
+            onChangeText={setSurname}
+            autoCapitalize="words"
+          />
+          <TextInput
+            placeholder="Correo institucional"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TouchableOpacity style={styles.button} onPress={goToScan}>
+            <Text style={styles.buttonText}>Continuar</Text>
           </TouchableOpacity>
-        )}
-      </View>
-
-      {isWeb ? (
-        <View style={styles.scannerContainerWeb}>
-          {webError ? (
-            <View style={styles.manualBox}>
-              <Text style={styles.muted}>{webError}</Text>
-              <TextInput
-                placeholder="Pega el token del QR"
-                style={styles.input}
-                value={manualToken}
-                onChangeText={setManualToken}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
-                <Text style={styles.buttonText}>Validar token</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <video
-              ref={videoRef}
-              style={styles.video}
-              muted
-              playsInline
-              autoPlay
-            />
-          )}
         </View>
       ) : (
-        <View style={styles.scannerContainer}>
-          {scanning ? (
-            <BarCodeScanner
-              onBarCodeScanned={handleBarCodeScanned}
-              style={StyleSheet.absoluteFillObject}
-            />
+        <>
+          {isWeb ? (
+            <View style={styles.scannerContainerWeb}>
+              {webError ? (
+                <View style={styles.manualBox}>
+                  <Text style={styles.muted}>{webError}</Text>
+                  <TextInput
+                    placeholder="Pega el token del QR"
+                    style={styles.input}
+                    value={manualToken}
+                    onChangeText={setManualToken}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
+                    <Text style={styles.buttonText}>Validar token</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <video
+                  ref={videoRef}
+                  style={styles.video}
+                  muted
+                  playsInline
+                  autoPlay
+                />
+              )}
+            </View>
           ) : (
-            <View style={styles.placeholder}>
-              <Text style={styles.muted}>Pulsa "Abrir cámara" para escanear</Text>
+            <View style={styles.scannerContainer}>
+              {scanning ? (
+                <BarCodeScanner
+                  onBarCodeScanned={handleBarCodeScanned}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              ) : (
+                <View style={styles.placeholder}>
+                  <Text style={styles.muted}>Pulsa "Continuar" para escanear</Text>
+                </View>
+              )}
             </View>
           )}
-        </View>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={backToForm}>
+            <Text style={styles.buttonText}>Volver a datos</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {loading && (
@@ -327,6 +365,15 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     alignItems: 'center'
+  },
+  secondaryButton: {
+    marginTop: 12,
+    backgroundColor: '#0f172a',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155'
   },
   buttonText: {
     color: '#e2e8f0',
