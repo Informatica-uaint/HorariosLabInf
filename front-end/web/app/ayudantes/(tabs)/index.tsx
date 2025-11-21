@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { StatusBar } from 'expo-status-bar';
@@ -24,11 +24,17 @@ export default function AyudantesScan() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<AccessResult | null>(null);
+  const [manualToken, setManualToken] = useState('');
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
-    requestPermission();
+    if (!isWeb) {
+      requestPermission();
+    } else {
+      setHasPermission(true);
+    }
     hydrateUser();
-  }, []);
+  }, [isWeb]);
 
   const requestPermission = async () => {
     const { status } = await BarCodeScanner.requestPermissionsAsync();
@@ -110,8 +116,8 @@ export default function AyudantesScan() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <Text style={styles.title}>Escanea el QR del lector</Text>
-      <Text style={styles.subtitle}>Portal Ayudantes: valida tus credenciales escaneando el código mostrado por el lector.</Text>
+      <Text style={styles.title}>Escanea o ingresa el QR del lector</Text>
+      <Text style={styles.subtitle}>Portal Ayudantes: valida tus credenciales con el código mostrado por el lector.</Text>
 
       <View style={styles.form}>
         <TextInput
@@ -136,23 +142,42 @@ export default function AyudantesScan() {
           autoCapitalize="none"
           keyboardType="email-address"
         />
-        <TouchableOpacity style={styles.button} onPress={() => setScanning(true)}>
-          <Text style={styles.buttonText}>Abrir cámara</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.scannerContainer}>
-        {scanning ? (
-          <BarCodeScanner
-            onBarCodeScanned={handleBarCodeScanned}
-            style={StyleSheet.absoluteFillObject}
-          />
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={styles.muted}>Pulsa "Abrir cámara" para escanear</Text>
-          </View>
+        {!isWeb && (
+          <TouchableOpacity style={styles.button} onPress={() => setScanning(true)}>
+            <Text style={styles.buttonText}>Abrir cámara</Text>
+          </TouchableOpacity>
         )}
       </View>
+
+      {isWeb ? (
+        <View style={styles.manualBox}>
+          <Text style={styles.muted}>Componente de cámara no soportado en web. Pega el token del QR:</Text>
+          <TextInput
+            placeholder="Token del QR"
+            style={styles.input}
+            value={manualToken}
+            onChangeText={setManualToken}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
+            <Text style={styles.buttonText}>Validar token</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.scannerContainer}>
+          {scanning ? (
+            <BarCodeScanner
+              onBarCodeScanned={handleBarCodeScanned}
+              style={StyleSheet.absoluteFillObject}
+            />
+          ) : (
+            <View style={styles.placeholder}>
+              <Text style={styles.muted}>Pulsa "Abrir cámara" para escanear</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {loading && (
         <View style={styles.statusBox}>
@@ -213,6 +238,14 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#e2e8f0',
     fontWeight: '600'
+  },
+  manualBox: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 8
   },
   scannerContainer: {
     flex: 1,
