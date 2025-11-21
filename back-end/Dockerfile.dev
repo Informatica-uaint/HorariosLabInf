@@ -1,0 +1,47 @@
+# Dockerfile.dev - Backend para desarrollo
+FROM python:3.11-slim
+
+# Metadatos
+LABEL maintainer="acceso.informaticauaint.com"
+LABEL description="API Flask unificada para desarrollo"
+
+# Variables de entorno para desarrollo
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=app.py \
+    FLASK_ENV=development \
+    FLASK_DEBUG=1
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de dependencias
+COPY requirements.txt .
+
+# Instalar dependencias de Python
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copiar código fuente (se monta como volumen en desarrollo)
+COPY . .
+
+# Crear certificados SSL autofirmados para desarrollo si no existen
+RUN if [ ! -f certificate.pem ]; then \
+        openssl req -x509 -newkey rsa:4096 -keyout privatekey.pem -out certificate.pem -days 365 -nodes \
+        -subj "/C=CL/ST=State/L=City/O=Organization/CN=localhost"; \
+    fi
+
+# Exponer puerto
+EXPOSE 5000
+
+# Comando para desarrollo (con hot reload)
+CMD ["python", "app.py"]

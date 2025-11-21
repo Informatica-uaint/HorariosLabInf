@@ -1,0 +1,104 @@
+services:
+  # Base de datos MySQL para producción
+  mysql:
+    image: mysql:8.0
+    container_name: horarios_mysql_prod
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data_prod:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - horarios_network_prod
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      timeout: 20s
+      retries: 10
+      interval: 30s
+
+  # Backend API unificada para producción
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:${IMAGE_TAG:-latest}
+    container_name: horarios_backend_prod
+    restart: unless-stopped
+    environment:
+      # Flask configuration
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-0}
+
+      # Database configuration
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DB: ${MYSQL_DATABASE}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+
+      # Security configuration
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+
+      # Application configuration
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      USE_SSL: ${USE_SSL:-true}
+
+      # Server configuration
+      HOST: ${BACKEND_HOST:-0.0.0.0}
+      PORT: ${BACKEND_PORT:-5000}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - horarios_network_prod
+      - newt-proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "${USE_SSL:-true}" == "true" && "https://localhost:5000/api/health" || "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      # SSL certificates for production (if needed)
+      - ${SSL_CERT_PATH:-./certs}:/app/certs:ro
+
+  # Frontend Web para producción
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
+    container_name: horarios_frontend_prod
+    restart: unless-stopped
+    environment:
+      # Frontend configuration will be built into the image
+      # Runtime nginx configuration can be set here if needed
+      NGINX_HOST: ${FRONTEND_HOST:-localhost}
+      NGINX_PORT: ${FRONTEND_PORT:-80}
+    depends_on:
+      - backend
+    networks:
+      - horarios_network_prod
+      - newt-proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/mysql
+
+networks:
+  horarios_network_prod:
+    driver: bridge
+  newt-proxy:
+    external: true

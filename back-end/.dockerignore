@@ -1,0 +1,101 @@
+# back-end/.dockerignore
+
+# Git
+.git
+.gitignore
+.github
+.gitattributes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Documentation
+README.md
+*.md
+docs/
+*.rst
+
+# Development files
+.env
+.env.*
+.env.example
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile.dev
+.dockerignore
+
+# Tests
+tests/
+test/
+*_test.py
+test_*.py
+pytest.ini
+.pytest_cache/
+
+# Old/unused directories (deprecated APIs)
+api_estudiantes/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Database files (should never be in image)
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.tmp
