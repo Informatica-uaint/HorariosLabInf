@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
@@ -26,14 +26,19 @@ export default function EstudiantesScan() {
   const [lastResult, setLastResult] = useState<AccessResult | null>(null);
   const [manualToken, setManualToken] = useState('');
   const isWeb = Platform.OS === 'web';
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanInterval = useRef<NodeJS.Timeout | null>(null);
+  const [webError, setWebError] = useState('');
 
   useEffect(() => {
     if (!isWeb) {
       requestPermission();
     } else {
       setHasPermission(true);
+      startWebScanner();
     }
     hydrateUser();
+    return () => stopWebScanner();
   }, [isWeb]);
 
   const requestPermission = async () => {
@@ -68,6 +73,11 @@ export default function EstudiantesScan() {
       return;
     }
 
+    if (!token) {
+      Alert.alert('QR vacío', 'No se recibió un token de QR.');
+      return;
+    }
+
     setLoading(true);
     setLastResult(null);
     try {
@@ -93,6 +103,53 @@ export default function EstudiantesScan() {
     } finally {
       setLoading(false);
       setScanning(true);
+    }
+  };
+
+  const startWebScanner = async () => {
+    if (!isWeb || typeof window === 'undefined') return;
+    // @ts-ignore
+    const BarcodeDetector = (window as any).BarcodeDetector;
+    if (!BarcodeDetector) {
+      setWebError('El navegador no soporta BarcodeDetector. Usa la app móvil o pega el token.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      scanInterval.current = setInterval(async () => {
+        if (!videoRef.current) return;
+        try {
+          const codes = await detector.detect(videoRef.current);
+          if (codes && codes.length > 0) {
+            const value = codes[0].rawValue;
+            stopWebScanner();
+            submitAccess(value);
+          }
+        } catch (err) {
+          // Silenciar errores de detección frecuentes
+        }
+      }, 500);
+    } catch (err: any) {
+      setWebError(err?.message || 'No se pudo acceder a la cámara');
+    }
+  };
+
+  const stopWebScanner = () => {
+    if (scanInterval.current) {
+      clearInterval(scanInterval.current);
+      scanInterval.current = null;
+    }
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach((t) => t.stop());
     }
   };
 
@@ -150,19 +207,31 @@ export default function EstudiantesScan() {
       </View>
 
       {isWeb ? (
-        <View style={styles.manualBox}>
-          <Text style={styles.muted}>Componente de cámara no soportado en web. Pega el token del QR:</Text>
-          <TextInput
-            placeholder="Token del QR"
-            style={styles.input}
-            value={manualToken}
-            onChangeText={setManualToken}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
-            <Text style={styles.buttonText}>Validar token</Text>
-          </TouchableOpacity>
+        <View style={styles.scannerContainerWeb}>
+          {webError ? (
+            <View style={styles.manualBox}>
+              <Text style={styles.muted}>{webError}</Text>
+              <TextInput
+                placeholder="Pega el token del QR"
+                style={styles.input}
+                value={manualToken}
+                onChangeText={setManualToken}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
+                <Text style={styles.buttonText}>Validar token</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <video
+              ref={videoRef}
+              style={styles.video}
+              muted
+              playsInline
+              autoPlay
+            />
+          )}
         </View>
       ) : (
         <View style={styles.scannerContainer}>
@@ -255,10 +324,25 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     backgroundColor: '#1e293b'
   },
+  scannerContainerWeb: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   placeholder: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
   },
   statusBox: {
     backgroundColor: '#1e293b',
