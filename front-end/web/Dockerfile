@@ -29,8 +29,10 @@ WORKDIR /app
 # Copiar archivos de dependencias para aprovechar cache de Docker
 COPY package.json package-lock.json* ./
 
-# Instalar TODAS las dependencias (prod + dev) necesarias para el build
-RUN npm ci --prefer-offline --no-audit
+# Instalar dependencias (prod + dev) necesarias para el build.
+# Si el lock está desfasado, reintenta con legacy-peer-deps para no romper el build.
+RUN npm ci --prefer-offline --no-audit --loglevel=info || \
+    npm install --legacy-peer-deps --loglevel=info
 
 # Copiar el resto del código fuente
 COPY . .
