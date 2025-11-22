@@ -4,6 +4,7 @@ from flask import Flask
 from flask_cors import CORS
 from pathlib import Path
 from dotenv import load_dotenv
+from database import get_connection
 
 # Importar configuraciones y utilidades
 from config import Config
@@ -65,6 +66,7 @@ def create_app():
     app.register_blueprint(horas_bp, url_prefix='/api')
     app.register_blueprint(estado_bp, url_prefix='/api')
     app.register_blueprint(lector_bp, url_prefix='/api')
+    ensure_estado_table()
 
     # Registrar blueprints de estudiantes
     app.register_blueprint(estudiantes_bp, url_prefix='/api/estudiantes')
@@ -83,6 +85,29 @@ def create_app():
         }
     
     return app
+
+def ensure_estado_table():
+    """Crea la tabla estado_usuarios si no existe."""
+    ddl = """
+    CREATE TABLE IF NOT EXISTS estado_usuarios (
+        email VARCHAR(100) NOT NULL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        apellido VARCHAR(100) NOT NULL,
+        estado ENUM('dentro', 'fuera') DEFAULT 'fuera',
+        ultima_entrada DATETIME NULL,
+        ultima_salida DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+    """
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(ddl)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"ADVERTENCIA: no se pudo asegurar la tabla estado_usuarios: {e}")
 
 # Crear la aplicación
 app = create_app()

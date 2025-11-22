@@ -72,6 +72,18 @@ CREATE TABLE IF NOT EXISTS registros (
     INDEX idx_tipo (tipo)
 );
 
+-- Estado de usuarios (entrada/salida)
+CREATE TABLE IF NOT EXISTS estado_usuarios (
+    email VARCHAR(100) NOT NULL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    estado ENUM('dentro', 'fuera') DEFAULT 'fuera',
+    ultima_entrada DATETIME NULL,
+    ultima_salida DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Insertar datos de ejemplo para desarrollo
 INSERT IGNORE INTO usuarios_estudiantes (nombre, apellido, email, TP) VALUES
 ('Juan', 'Pérez', 'juan.perez@ejemplo.com', 'Ingeniería Informática'),
