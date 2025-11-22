@@ -11,10 +11,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Instalar dependencias del sistema necesarias para compilar
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc \
     g++ \
+    make \
     libffi-dev \
     libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Crear directorio de trabajo
