@@ -24,6 +24,7 @@ type AccessResult = {
 const STORAGE_KEY = 'scanner_user_ayudante';
 const TOKEN_STORAGE_KEY = 'reader_token_session';
 const TOKEN_TTL_MS = 55000;
+const DUPLICATE_WINDOW_MS = 3000;
 
 const extractReaderToken = (raw: string) => {
   if (!raw) return '';
@@ -88,6 +89,10 @@ export default function AyudantesScan() {
   const readerRef = useRef<any>(null);
   const autoSubmitted = useRef(false);
   const [pendingToken, setPendingToken] = useState('');
+  const tokenFromQueryRef = useRef(false);
+  const lastTokenRef = useRef<{ token: string; ts: number }>({ token: '', ts: 0 });
+  const toastTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [toast, setToast] = useState<{ text: string; detail?: string; variant: 'entrada' | 'salida' | 'error' | 'timbre' } | null>(null);
 
   useEffect(() => {
     if (!isWeb) {
@@ -98,26 +103,23 @@ export default function AyudantesScan() {
     hydrateUser();
     const initialToken = extractReaderToken(typeof window !== 'undefined' ? window.location.href : '');
     if (initialToken) {
+      tokenFromQueryRef.current = true;
       saveSessionToken(initialToken);
       setPendingToken(initialToken);
       setManualToken(initialToken);
-    } else {
-      const stored = getSessionToken();
-      if (stored) {
-        setPendingToken(stored);
-        setManualToken(stored);
-      }
     }
-    return () => stopWebScanner();
+    return () => {
+      stopWebScanner();
+      if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    };
   }, [isWeb]);
 
   useEffect(() => {
     if (isWeb && step === 'scan') {
       startWebScanner();
-      const stored = getSessionToken();
-      if (stored && !autoSubmitted.current) {
+      if (tokenFromQueryRef.current && pendingToken && !autoSubmitted.current) {
         autoSubmitted.current = true;
-        submitAccess(stored, { fromStored: true });
+        submitAccess(pendingToken, { fromStored: true });
       }
     } else {
       stopWebScanner();
@@ -156,8 +158,7 @@ export default function AyudantesScan() {
       saveSessionToken(extracted);
       return extracted;
     }
-    const stored = getSessionToken();
-    if (stored) return stored;
+    if (tokenFromQueryRef.current && pendingToken) return pendingToken;
     return '';
   };
 
@@ -173,8 +174,26 @@ export default function AyudantesScan() {
       return;
     }
 
+    // Evitar reenvíos rápidos del mismo token
+    const now = Date.now();
+    if (finalToken === lastTokenRef.current.token && now - lastTokenRef.current.ts < DUPLICATE_WINDOW_MS) {
+      return;
+    }
+    lastTokenRef.current = { token: finalToken, ts: now };
+
     setLoading(true);
     setLastResult(null);
+    const showToast = (variant: 'entrada' | 'salida' | 'error' | 'timbre', detail?: string) => {
+      if (toastTimeout.current) clearTimeout(toastTimeout.current);
+      const textMap = {
+        entrada: 'Entrada marcada',
+        salida: 'Salida marcada',
+        error: 'Error',
+        timbre: 'Toca el timbre'
+      };
+      setToast({ text: textMap[variant], detail, variant });
+      toastTimeout.current = setTimeout(() => setToast(null), 3000);
+    };
     try {
       const response = await fetch(API_ENDPOINTS.READER.VALIDATE, {
         method: 'POST',
@@ -189,6 +208,15 @@ export default function AyudantesScan() {
 
       const result = await response.json();
       setLastResult(result);
+      const detailText = result?.message || result?.error;
+      const lowerDetail = (detailText || '').toLowerCase();
+      let variant: 'entrada' | 'salida' | 'error' | 'timbre' = 'error';
+      if (lowerDetail.includes('timbre')) {
+        variant = 'timbre';
+      } else if (result?.success) {
+        variant = result?.tipo === 'Salida' ? 'salida' : 'entrada';
+      }
+      showToast(variant, detailText);
       if (!response.ok) {
         const message = result?.error || 'No se pudo registrar el acceso';
         Alert.alert('Acceso denegado', message);
@@ -418,6 +446,12 @@ export default function AyudantesScan() {
         </View>
       )}
     </View>
+      {toast && (
+        <View style={[styles.toast, styles[`toast_${toast.variant}`]]}>
+          <Text style={styles.toastText}>{toast.text}</Text>
+          {toast.detail ? <Text style={styles.toastDetail}>{toast.detail}</Text> : null}
+        </View>
+      )}
   );
 }
 
@@ -520,6 +554,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16
   },
+  toast: {
+    position: 'absolute',
+    top: 16,
+    left: 20,
+    right: 20,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 10
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  toastDetail: {
+    color: '#e5e7eb',
+    marginTop: 2,
+    fontSize: 13
+  },
+  toast_entrada: { backgroundColor: '#16a34a' },
+  toast_salida: { backgroundColor: '#0ea5e9' },
+  toast_error: { backgroundColor: '#dc2626' },
+  toast_timbre: { backgroundColor: '#f59e0b' },
   success: {
     borderColor: '#22c55e'
   },
