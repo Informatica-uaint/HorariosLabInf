@@ -108,7 +108,8 @@ export default function EstudiantesScan() {
     if (isWeb && step === 'scan') {
       startWebScanner();
       const stored = getSessionToken();
-      if (stored && !autoSubmitted.current) {
+      // Solo auto-enviar si hay token, no se ha enviado, y no hay resultado previo
+      if (stored && !autoSubmitted.current && !lastResult) {
         autoSubmitted.current = true;
         submitAccess(stored, { fromStored: true });
       }
@@ -185,6 +186,13 @@ export default function EstudiantesScan() {
       if (!response.ok) {
         const message = result?.error || 'No se pudo registrar el acceso';
         Alert.alert('Acceso denegado', message);
+      } else {
+        // Limpiar token después de uso exitoso para prevenir auto-retry
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+        }
+        setPendingToken('');
+        setManualToken('');
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo contactar al servidor');
