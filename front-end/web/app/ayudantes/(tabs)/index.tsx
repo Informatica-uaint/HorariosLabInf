@@ -15,6 +15,25 @@ type AccessResult = {
 };
 
 const STORAGE_KEY = 'scanner_user_ayudante';
+const extractReaderToken = (raw: string) => {
+  if (!raw) return '';
+  try {
+    const url = new URL(raw.trim());
+    const fromQuery = url.searchParams.get('readerToken');
+    if (fromQuery) return fromQuery;
+  } catch {
+    // Not a URL, continue fallback
+  }
+  const match = raw.match(/readerToken=([^&\s]+)/i);
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  return raw.trim();
+};
 
 export default function AyudantesScan() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -77,12 +96,13 @@ export default function AyudantesScan() {
   };
 
   const submitAccess = async (token: string) => {
+    const extractedToken = extractReaderToken(token);
     if (!name || !surname || !email) {
       Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo antes de escanear.');
       return;
     }
 
-    if (!token) {
+    if (!extractedToken) {
       Alert.alert('QR vacío', 'No se recibió un token de QR.');
       return;
     }
@@ -94,7 +114,7 @@ export default function AyudantesScan() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token,
+          token: extractedToken,
           nombre: name.trim(),
           apellido: surname.trim(),
           email: email.trim()
