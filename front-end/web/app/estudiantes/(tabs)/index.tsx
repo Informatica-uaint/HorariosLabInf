@@ -446,13 +446,14 @@ export default function EstudiantesScan() {
           )}
         </View>
       )}
-    </View>
+
       {toast && (
         <View style={[styles.toast, styles[`toast_${toast.variant}`]]}>
           <Text style={styles.toastText}>{toast.text}</Text>
           {toast.detail ? <Text style={styles.toastDetail}>{toast.detail}</Text> : null}
         </View>
       )}
+    </View>
   );
 }
 
