@@ -6,6 +6,7 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from database import get_connection
 from utils.datetime_utils import get_current_datetime
 from config import Config
+from utils.door_control import open_door_if_authorized
 
 lector_bp = Blueprint('lector', __name__)
 
@@ -83,7 +84,7 @@ def validar_token_lector():
 
         conn.close()
 
-        return jsonify({
+        response = {
             "success": True,
             "message": "Acceso registrado",
             "tipo": tipo,
@@ -91,7 +92,15 @@ def validar_token_lector():
             "registro_id": registro_id,
             "station_id": station_id,
             "nonce": nonce
-        })
+        }
     except Exception as exc:
         print(f"Error en validar_token_lector: {str(exc)}")
         return jsonify({"error": "Error interno", "detail": str(exc)}), 500
+
+    # Intentar apertura de puerta (best-effort)
+    try:
+        open_door_if_authorized(email, data.get('tipoUsuario') or data.get('tipo') or '')
+    except Exception as e:
+        print(f"No se pudo abrir la puerta: {e}")
+
+    return jsonify(response)

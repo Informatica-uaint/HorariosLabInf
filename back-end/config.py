@@ -18,6 +18,12 @@ class Config:
     READER_QR_SECRET = os.getenv('READER_QR_SECRET')
     READER_STATION_ID = os.getenv('READER_STATION_ID', 'lector-web')
 
+    # Control de puerta (ESPHOME)
+    DOOR_HOST = os.getenv('DOOR_HOST')
+    DOOR_PORT = int(os.getenv('DOOR_PORT', 6053))
+    DOOR_DEVICE_NAME = os.getenv('DOOR_DEVICE_NAME', 'arturito')
+    DOOR_API_KEY = os.getenv('DOOR_API_KEY')
+
     # Base de datos
     DB_HOST = os.getenv('MYSQL_HOST')
     DB_USER = os.getenv('MYSQL_USER')

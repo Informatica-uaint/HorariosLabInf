@@ -26,3 +26,4 @@ gunicorn==21.2.0
 
 # Utilidades
 Werkzeug==2.3.7
+aioesphomeapi==23.2.2
