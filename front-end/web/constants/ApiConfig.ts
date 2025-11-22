@@ -2,7 +2,7 @@
 // This file centralizes all API endpoint configurations
 
 // Get the API base URL from environment variable or use default
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.acceso.informaticauaint.com/api';
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
