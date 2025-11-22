@@ -1,466 +1,539 @@
-// app/(tabs)/index.tsx
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  ActivityIndicator,
-  Dimensions
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import QRCode from 'react-native-qrcode-svg';
+import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { StatusBar } from 'expo-status-bar';
+import { API_ENDPOINTS } from '../../../constants/ApiConfig';
 
-const { width } = Dimensions.get('window');
+type AccessResult = {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  tipo?: string;
+  estado?: string;
+  station_id?: string;
+};
 
-// Constante para la URL de la API
-const API_BASE = Platform.OS === 'web'
-  ? 'http://10.0.3.54:5000'
-  : 'http://10.0.3.54:8081'; // Reemplazar si se usa Expo Go en móvil
+const STORAGE_KEY = 'scanner_user_estudiante';
+const TOKEN_STORAGE_KEY = 'reader_token_session';
+const TOKEN_TTL_MS = 55000;
 
-export default function QRGeneratorScreen() {
+const extractReaderToken = (raw: string) => {
+  if (!raw) return '';
+  try {
+    const url = new URL(raw.trim());
+    const fromQuery = url.searchParams.get('readerToken');
+    if (fromQuery) return fromQuery;
+  } catch {
+    // Not a URL, continue fallback
+  }
+  const match = raw.match(/readerToken=([^&\s]+)/i);
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  return raw.trim();
+};
+
+const saveSessionToken = (token: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, savedAt: Date.now() }));
+  } catch {
+    // ignore
+  }
+};
+
+const getSessionToken = () => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const raw = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    if (!parsed?.token) return '';
+    if (Date.now() - (parsed.savedAt || 0) > TOKEN_TTL_MS) {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      return '';
+    }
+    return parsed.token as string;
+  } catch {
+    return '';
+  }
+};
+
+export default function EstudiantesScan() {
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
-  const [savedUsers, setSavedUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [autoRenewal, setAutoRenewal] = useState(false);
-  const [renewInterval, setRenewInterval] = useState(null);
-  const [qrExpired, setQrExpired] = useState(false);
-  
-  useEffect(() => {
-    loadSavedUsers();
-    return () => {
-      if (renewInterval) clearInterval(renewInterval);
-    };
-  }, []);
+  const [loading, setLoading] = useState(false);
+  const [lastResult, setLastResult] = useState<AccessResult | null>(null);
+  const [manualToken, setManualToken] = useState('');
+  const [step, setStep] = useState<'form' | 'scan'>('form');
+  const isWeb = Platform.OS === 'web';
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanInterval = useRef<NodeJS.Timeout | null>(null);
+  const [webError, setWebError] = useState('');
+  const readerRef = useRef<any>(null);
+  const autoSubmitted = useRef(false);
+  const [pendingToken, setPendingToken] = useState('');
 
-  const loadSavedUsers = async () => {
-    try {
-      const storedUsers = await AsyncStorage.getItem('savedUsers');
-      if (storedUsers !== null) {
-        setSavedUsers(JSON.parse(storedUsers));
+  useEffect(() => {
+    if (!isWeb) {
+      requestPermission();
+    } else {
+      setHasPermission(true);
+    }
+    hydrateUser();
+    const initialToken = extractReaderToken(typeof window !== 'undefined' ? window.location.href : '');
+    if (initialToken) {
+      saveSessionToken(initialToken);
+      setPendingToken(initialToken);
+      setManualToken(initialToken);
+    } else {
+      const stored = getSessionToken();
+      if (stored) {
+        setPendingToken(stored);
+        setManualToken(stored);
       }
-    } catch (error) {
-      console.error('Error loading users:', error);
+    }
+    return () => stopWebScanner();
+  }, [isWeb]);
+
+  useEffect(() => {
+    if (isWeb && step === 'scan') {
+      startWebScanner();
+      const stored = getSessionToken();
+      if (stored && !autoSubmitted.current) {
+        autoSubmitted.current = true;
+        submitAccess(stored, { fromStored: true });
+      }
+    } else {
+      stopWebScanner();
+    }
+  }, [isWeb, step]);
+
+  const requestPermission = async () => {
+    const { status } = await BarCodeScanner.requestPermissionsAsync();
+    setHasPermission(status === 'granted');
+  };
+
+  const hydrateUser = async () => {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setName(parsed.name || '');
+      setSurname(parsed.surname || '');
+      setEmail(parsed.email || '');
     }
   };
 
-  const saveUser = async () => {
-    if (name.trim() === '' || surname.trim() === '' || email.trim() === '' || !email.includes('@')) {
-      alert('Por favor ingresa datos válidos');
+  const persistUser = async () => {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ name, surname, email }));
+  };
+
+  const handleBarCodeScanned = async ({ data }: BarCodeScannerResult) => {
+    setScanning(false);
+    if (!data) return;
+    await persistUser();
+    submitAccess(data);
+  };
+
+  const resolveToken = (raw: string) => {
+    const extracted = extractReaderToken(raw);
+    if (extracted) {
+      saveSessionToken(extracted);
+      return extracted;
+    }
+    const stored = getSessionToken();
+    if (stored) return stored;
+    return '';
+  };
+
+  const submitAccess = async (token: string, opts?: { fromStored?: boolean }) => {
+    const finalToken = resolveToken(token || pendingToken);
+    if (!name || !surname || !email) {
+      Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo antes de escanear.');
       return;
     }
 
-    const timestamp = Date.now();
-    const userData = { 
-      name: name.trim(), 
-      surname: surname.trim(), 
-      email: email.trim(), 
-      timestamp, 
-      expired: false, 
-      tipoUsuario: 'ESTUDIANTE' // Identificador explícito de estudiante
-    };
+    if (!finalToken) {
+      Alert.alert('QR vacío', 'No se recibió un token de QR.');
+      return;
+    }
 
+    setLoading(true);
+    setLastResult(null);
     try {
-      const newUsers = [...savedUsers, userData];
-      await AsyncStorage.setItem('savedUsers', JSON.stringify(newUsers));
-      setSavedUsers(newUsers);
-      setSelectedUser(userData);
-      setQrExpired(false);
+      const response = await fetch(API_ENDPOINTS.READER.VALIDATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: finalToken,
+          nombre: name.trim(),
+          apellido: surname.trim(),
+          email: email.trim()
+        })
+      });
 
-      // Limpiar cualquier intervalo existente
-      if (renewInterval) {
-        clearInterval(renewInterval);
-        setRenewInterval(null);
+      const result = await response.json();
+      setLastResult(result);
+      if (!response.ok) {
+        const message = result?.error || 'No se pudo registrar el acceso';
+        Alert.alert('Acceso denegado', message);
       }
-
-      // Configurar auto-renovación o QR expirado
-      if (autoRenewal) {
-        const interval = setInterval(() => {
-          const newTimestamp = Date.now();
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            timestamp: newTimestamp,
-            expired: false
-          }));
-        }, 14000); // Renovar cada 14 segundos
-        setRenewInterval(interval);
-      } else {
-        // Establecer expiración después de 15 segundos
-        setTimeout(() => {
-          setQrExpired(true);
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            expired: true
-          }));
-        }, 15000);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No se pudo contactar al servidor');
+    } finally {
+      setLoading(false);
+      setScanning(true);
+      if (!opts?.fromStored) {
+        autoSubmitted.current = false;
       }
-
-      setName('');
-      setSurname('');
-      setEmail('');
-    } catch (error) {
-      console.error('Error saving user:', error);
     }
   };
 
-  const toggleAutoRenewal = () => {
-    const newAutoRenewal = !autoRenewal;
-    setAutoRenewal(newAutoRenewal);
-    
-    // Limpiar cualquier intervalo existente
-    if (renewInterval) {
-      clearInterval(renewInterval);
-      setRenewInterval(null);
+  const goToScan = async () => {
+    if (!name || !surname || !email) {
+      Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo.');
+      return;
     }
+    await persistUser();
+    setStep('scan');
+    if (!isWeb) {
+      setScanning(true);
+    }
+  };
 
-    if (selectedUser) {
-      if (newAutoRenewal) {
-        // Activar auto-renovación
-        const interval = setInterval(() => {
-          const newTimestamp = Date.now();
-          setSelectedUser(prevUser => ({
-            ...prevUser,
-            timestamp: newTimestamp,
-            expired: false
-          }));
-          setQrExpired(false);
-        }, 14000);
-        setRenewInterval(interval);
-      } else if (qrExpired) {
-        // Ya expirado, mantenerlo así
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          expired: true
-        }));
-      } else {
-        // Establecer expiración después de 15 segundos
-        setTimeout(() => {
-          setQrExpired(true);
-          setSelectedUser(prevUser => {
-            if (prevUser) {
-              return {
-                ...prevUser,
-                expired: true
-              };
+  const backToForm = () => {
+    stopWebScanner();
+    setScanning(false);
+    setStep('form');
+  };
+
+  const startWebScanner = async () => {
+    if (!isWeb || typeof window === 'undefined') return;
+    // @ts-ignore
+    const BarcodeDetector = (window as any).BarcodeDetector;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+
+      if (BarcodeDetector) {
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        scanInterval.current = setInterval(async () => {
+          if (!videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes && codes.length > 0) {
+              const value = codes[0].rawValue;
+              stopWebScanner();
+              submitAccess(value);
             }
-            return null;
-          });
-        }, 15000);
+          } catch {
+            // silencioso
+          }
+        }, 400);
+      } else {
+        // Fallback con ZXing para navegadores sin BarcodeDetector
+        const { BrowserMultiFormatReader, NotFoundException } = await import('@zxing/browser');
+        const reader = new BrowserMultiFormatReader();
+        readerRef.current = reader;
+        reader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current as any,
+          (result, err) => {
+            if (result?.getText()) {
+              stopWebScanner();
+              submitAccess(result.getText());
+            }
+            if (err && !(err instanceof NotFoundException)) {
+              // otros errores se ignoran en bucle
+            }
+          }
+        );
       }
+    } catch (err: any) {
+      setWebError(err?.message || 'No se pudo acceder a la cámara');
     }
   };
 
-  const selectSavedUser = (user) => {
-    // Limpiar cualquier intervalo existente
-    if (renewInterval) {
-      clearInterval(renewInterval);
-      setRenewInterval(null);
+  const stopWebScanner = () => {
+    if (scanInterval.current) {
+      clearInterval(scanInterval.current);
+      scanInterval.current = null;
     }
-    
-    setName(user.name);
-    setSurname(user.surname);
-    setEmail(user.email);
-    
-    // Al seleccionar un usuario existente, generar un nuevo QR con timestamp actual
-    const timestamp = Date.now();
-    const updatedUser = { ...user, timestamp, expired: false };
-    setSelectedUser(updatedUser);
-    setQrExpired(false);
-    
-    // Configurar expiración o auto-renovación
-    if (autoRenewal) {
-      const interval = setInterval(() => {
-        const newTimestamp = Date.now();
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          timestamp: newTimestamp,
-          expired: false
-        }));
-      }, 14000);
-      setRenewInterval(interval);
-    } else {
-      setTimeout(() => {
-        setQrExpired(true);
-        setSelectedUser(prevUser => ({
-          ...prevUser,
-          expired: true
-        }));
-      }, 15000);
+    if (readerRef.current) {
+      try {
+        readerRef.current.reset();
+      } catch (e) {
+        // ignore
+      }
+      readerRef.current = null;
+    }
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach((t) => t.stop());
     }
   };
 
-  // Generar valor QR como objeto JSON válido con codificación adecuada
-  const generateQrValue = () => {
-    if (!selectedUser) return JSON.stringify({});
-  
-    // Asegurar codificación de cadena adecuada eliminando espacios finales y normalizando texto
-    const sanitizedUser = {
-      name: selectedUser.name.trim(),
-      surname: selectedUser.surname.trim(),
-      email: selectedUser.email.trim(),
-      timestamp: selectedUser.timestamp,
-      tipoUsuario: 'ESTUDIANTE'  // Identificador explícito de estudiante
-    };
-  
-    // Agregar propiedades adicionales basadas en el estado
-    if (qrExpired && !autoRenewal) {
-      return JSON.stringify({
-        ...sanitizedUser,
-        expired: true,
-        status: "EXPIRED"
-      });
-    }
-  
-    if (autoRenewal) {
-      return JSON.stringify({
-        ...sanitizedUser,
-        timestamp: Date.now(),
-        autoRenewal: true,
-        status: "VALID"
-      });
-    }
-  
-    return JSON.stringify({
-      ...sanitizedUser,
-      status: "VALID"
-    });
-  };
+  if (hasPermission === null) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.muted}>Solicitando permiso de cámara...</Text>
+      </View>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Permiso de cámara denegado.</Text>
+        <Text style={styles.muted}>Habilita la cámara para escanear el QR del lector.</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Generador QR para Estudiantes</Text>
-        <TextInput style={styles.input} placeholder="Nombre" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Apellido" value={surname} onChangeText={setSurname} />
-        <TextInput 
-          style={styles.input} 
-          placeholder="Email institucional" 
-          value={email} 
-          onChangeText={setEmail} 
-          keyboardType="email-address" 
-          autoCapitalize="none" 
-        />
-        
-        <View style={styles.optionsRow}>
-          <TouchableOpacity 
-            style={styles.generateButton} 
-            onPress={saveUser}
-          >
-            <Text style={styles.generateButtonText}>Generar QR</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            onPress={toggleAutoRenewal} 
-            style={[styles.checkboxContainer, autoRenewal && styles.checkboxChecked]}
-          >
-            <Text style={styles.checkboxText}>Auto-renovar QR</Text>
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      <Text style={styles.title}>
+        {step === 'form' ? 'Ingresa tus datos' : 'Escanea el QR del lector'}
+      </Text>
+      <Text style={styles.subtitle}>
+        {step === 'form'
+          ? 'Portal Estudiantes: valida tus credenciales con el código mostrado por el lector.'
+          : 'Apunta la cámara al QR. Los datos ingresados se guardan para próximos accesos.'}
+      </Text>
+
+      {step === 'form' ? (
+        <View style={styles.form}>
+          <TextInput
+            placeholder="Nombre"
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
+          <TextInput
+            placeholder="Apellido"
+            style={styles.input}
+            value={surname}
+            onChangeText={setSurname}
+            autoCapitalize="words"
+          />
+          <TextInput
+            placeholder="Correo institucional"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TouchableOpacity style={styles.button} onPress={goToScan}>
+            <Text style={styles.buttonText}>Continuar</Text>
           </TouchableOpacity>
         </View>
-
-        {savedUsers.length > 0 && (
-          <ScrollView horizontal style={styles.userList} showsHorizontalScrollIndicator={false}>
-            {savedUsers.map((user, idx) => (
-              <TouchableOpacity 
-                key={idx} 
-                style={styles.userItem}
-                onPress={() => selectSavedUser(user)}
-              >
-                <Text style={styles.userItemText}>{user.name} {user.surname}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-
-        {selectedUser && (
-          <View style={styles.qrContainer}>
-            <Text style={[
-              styles.userText, 
-              (qrExpired && !autoRenewal) ? styles.expiredText : styles.validText
-            ]}>
-              {(qrExpired && !autoRenewal) 
-                ? 'QR Expirado' 
-                : `${selectedUser.name} ${selectedUser.surname} - ${selectedUser.email}`
-              }
-            </Text>
-            
-            <QRCode
-              value={generateQrValue()}
-              size={width > 400 ? 200 : width * 0.5}
-              backgroundColor="white"
-              color={(qrExpired && !autoRenewal) ? "#cccccc" : "black"}
-            />
-            
-            <View style={styles.userInfoContainer}>
-              <Text style={styles.userInfoText}>
-                <Text style={styles.infoLabel}>Nombre: </Text>
-                {selectedUser.name} {selectedUser.surname}
-              </Text>
-              <Text style={styles.userInfoText}>
-                <Text style={styles.infoLabel}>Email: </Text>
-                {selectedUser.email}
-              </Text>
-              <Text style={styles.userInfoText}>
-                <Text style={styles.infoLabel}>Tipo: </Text>
-                <Text style={styles.tipoText}>ESTUDIANTE</Text>
-              </Text>
+      ) : (
+        <>
+          {isWeb ? (
+            <View style={styles.scannerContainerWeb}>
+              {webError ? (
+                <View style={styles.manualBox}>
+                  <Text style={styles.muted}>{webError}</Text>
+                  <TextInput
+                    placeholder="Pega el token del QR"
+                    style={styles.input}
+                    value={manualToken}
+                    onChangeText={setManualToken}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity style={styles.button} onPress={() => submitAccess(manualToken)}>
+                    <Text style={styles.buttonText}>Validar token</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <video
+                  ref={videoRef}
+                  style={styles.video}
+                  muted
+                  playsInline
+                  autoPlay
+                />
+              )}
             </View>
-            
-            {autoRenewal && (
-              <Text style={styles.renewalText}>QR con renovación automática activa</Text>
-            )}
-            
-            {!autoRenewal && !qrExpired && (
-              <Text style={styles.expirationText}>
-                Este QR expirará en 15 segundos
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-      <StatusBar style="dark" />
-    </ScrollView>
+          ) : (
+            <View style={styles.scannerContainer}>
+              {scanning ? (
+                <BarCodeScanner
+                  onBarCodeScanned={handleBarCodeScanned}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              ) : (
+                <View style={styles.placeholder}>
+                  <Text style={styles.muted}>Pulsa "Continuar" para escanear</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={backToForm}>
+            <Text style={styles.buttonText}>Volver a datos</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {loading && (
+        <View style={styles.statusBox}>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.statusText}>Validando acceso...</Text>
+        </View>
+      )}
+
+      {lastResult && (
+        <View style={[styles.statusBox, lastResult.success ? styles.success : styles.error]}>
+          <Text style={styles.statusTitle}>
+            {lastResult.success ? `Acceso ${lastResult.tipo || 'registrado'}` : 'Acceso denegado'}
+          </Text>
+          <Text style={styles.statusText}>{lastResult.message || lastResult.error}</Text>
+          {lastResult.station_id && (
+            <Text style={styles.statusText}>Estación: {lastResult.station_id}</Text>
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
+    backgroundColor: '#0f172a',
     padding: 20,
-    paddingBottom: 40,
+    gap: 12
   },
   title: {
-    fontSize: width > 400 ? 22 : 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#e2e8f0',
+    fontSize: 24,
+    fontWeight: '700'
+  },
+  subtitle: {
+    color: '#94a3b8',
+    fontSize: 14
+  },
+  form: {
+    gap: 10
   },
   input: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-    backgroundColor: 'white',
-    fontSize: 16,
-  },
-  optionsRow: {
-    flexDirection: width > 600 ? 'row' : 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-    gap: 10,
-  },
-  generateButton: {
-    backgroundColor: '#0066CC',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    minWidth: width > 600 ? 'auto' : '100%',
-    alignItems: 'center',
-  },
-  generateButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    color: '#e2e8f0',
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    backgroundColor: 'white',
-    minWidth: width > 600 ? 'auto' : '100%',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#e6f7ff',
-    borderColor: '#1890ff',
-  },
-  checkboxText: {
-    marginLeft: 5,
-    fontSize: 16,
-  },
-  userList: {
-    maxHeight: 60,
-    marginVertical: 10,
-  },
-  userItem: {
-    padding: 12,
-    marginRight: 10,
-    backgroundColor: '#e6f7ff',
-    borderRadius: 5,
-    minWidth: 120,
-  },
-  userItemText: {
-    color: '#1890ff',
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  qrContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-    padding: 20,
-    backgroundColor: 'white',
     borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#334155'
   },
-  userText: {
-    fontSize: 16,
-    marginBottom: 15,
-    fontWeight: '500',
-    textAlign: 'center',
+  button: {
+    marginTop: 4,
+    backgroundColor: '#2563eb',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center'
   },
-  expiredText: {
-    color: '#ff4d4f',
+  secondaryButton: {
+    marginTop: 12,
+    backgroundColor: '#0f172a',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155'
   },
-  validText: {
-    color: '#52c41a',
+  buttonText: {
+    color: '#e2e8f0',
+    fontWeight: '600'
   },
-  userInfoContainer: {
-    marginTop: 15,
-    backgroundColor: '#f9f9f9',
-    padding: 15,
-    borderRadius: 5,
+  manualBox: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 8
+  },
+  scannerContainer: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1e293b'
+  },
+  scannerContainerWeb: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  placeholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  video: {
     width: '100%',
+    height: '100%',
+    objectFit: 'cover'
   },
-  userInfoText: {
-    marginBottom: 8,
-    fontSize: 14,
+  statusBox: {
+    backgroundColor: '#1e293b',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 4
   },
-  infoLabel: {
-    fontWeight: 'bold',
+  statusText: {
+    color: '#cbd5e1'
   },
-  tipoText: {
-    color: '#0066CC',
-    fontWeight: 'bold',
+  statusTitle: {
+    color: '#e2e8f0',
+    fontWeight: '700',
+    fontSize: 16
   },
-  renewalText: {
-    marginTop: 15,
-    color: '#1890ff',
-    fontStyle: 'italic',
-    textAlign: 'center',
+  success: {
+    borderColor: '#22c55e'
   },
-  expirationText: {
-    marginTop: 15,
-    color: '#999',
-    fontStyle: 'italic',
-    textAlign: 'center',
+  error: {
+    borderColor: '#f87171'
   },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+    padding: 20,
+    gap: 10
+  },
+  muted: {
+    color: '#94a3b8'
+  },
+  errorText: {
+    color: '#fca5a5',
+    fontSize: 16,
+    fontWeight: '600'
+  }
 });
