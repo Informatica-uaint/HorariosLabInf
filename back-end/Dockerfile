@@ -23,9 +23,9 @@ WORKDIR /app
 # Copiar solo requirements.txt para aprovechar cache de Docker
 COPY requirements.txt .
 
-# Instalar dependencias en un directorio temporal
+# Instalar dependencias globalmente
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --user -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # ============================================
 # Stage 2: Runtime - Imagen final optimizada
@@ -41,8 +41,7 @@ LABEL stage="production"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FLASK_APP=app.py \
-    FLASK_ENV=production \
-    PATH=/home/appuser/.local/bin:$PATH
+    FLASK_ENV=production
 
 # Instalar solo dependencias de runtime necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -57,7 +56,7 @@ RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 WORKDIR /app
 
 # Copiar dependencias de Python desde el builder
-COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+COPY --from=builder /usr/local /usr/local
 
 # Copiar código fuente
 COPY --chown=appuser:appuser . .
