@@ -1,9 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
 import { StatusBar } from 'expo-status-bar';
 import { API_ENDPOINTS } from '../../../constants/ApiConfig';
+
+// Conditional imports for native only
+let BarCodeScanner: any;
+let BarCodeScannerResult: any;
+if (Platform.OS !== 'web') {
+  const barcodeModule = require('expo-barcode-scanner');
+  BarCodeScanner = barcodeModule.BarCodeScanner;
+}
 
 type AccessResult = {
   success?: boolean;
@@ -62,25 +69,6 @@ const getSessionToken = () => {
   } catch {
     return '';
   }
-};
-const extractReaderToken = (raw: string) => {
-  if (!raw) return '';
-  try {
-    const url = new URL(raw.trim());
-    const fromQuery = url.searchParams.get('readerToken');
-    if (fromQuery) return fromQuery;
-  } catch {
-    // Not a URL, continue fallback
-  }
-  const match = raw.match(/readerToken=([^&\s]+)/i);
-  if (match?.[1]) {
-    try {
-      return decodeURIComponent(match[1]);
-    } catch {
-      return match[1];
-    }
-  }
-  return raw.trim();
 };
 
 export default function AyudantesScan() {
