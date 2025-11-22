@@ -15,6 +15,54 @@ type AccessResult = {
 };
 
 const STORAGE_KEY = 'scanner_user_ayudante';
+const TOKEN_STORAGE_KEY = 'reader_token_session';
+const TOKEN_TTL_MS = 55000;
+
+const extractReaderToken = (raw: string) => {
+  if (!raw) return '';
+  try {
+    const url = new URL(raw.trim());
+    const fromQuery = url.searchParams.get('readerToken');
+    if (fromQuery) return fromQuery;
+  } catch {
+    // Not a URL, continue fallback
+  }
+  const match = raw.match(/readerToken=([^&\s]+)/i);
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  return raw.trim();
+};
+
+const saveSessionToken = (token: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, savedAt: Date.now() }));
+  } catch {
+    // ignore
+  }
+};
+
+const getSessionToken = () => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const raw = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    if (!parsed?.token) return '';
+    if (Date.now() - (parsed.savedAt || 0) > TOKEN_TTL_MS) {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      return '';
+    }
+    return parsed.token as string;
+  } catch {
+    return '';
+  }
+};
 const extractReaderToken = (raw: string) => {
   if (!raw) return '';
   try {
@@ -50,6 +98,8 @@ export default function AyudantesScan() {
   const scanInterval = useRef<NodeJS.Timeout | null>(null);
   const [webError, setWebError] = useState('');
   const readerRef = useRef<any>(null);
+  const autoSubmitted = useRef(false);
+  const [pendingToken, setPendingToken] = useState('');
 
   useEffect(() => {
     if (!isWeb) {
@@ -58,12 +108,29 @@ export default function AyudantesScan() {
       setHasPermission(true);
     }
     hydrateUser();
+    const initialToken = extractReaderToken(typeof window !== 'undefined' ? window.location.href : '');
+    if (initialToken) {
+      saveSessionToken(initialToken);
+      setPendingToken(initialToken);
+      setManualToken(initialToken);
+    } else {
+      const stored = getSessionToken();
+      if (stored) {
+        setPendingToken(stored);
+        setManualToken(stored);
+      }
+    }
     return () => stopWebScanner();
   }, [isWeb]);
 
   useEffect(() => {
     if (isWeb && step === 'scan') {
       startWebScanner();
+      const stored = getSessionToken();
+      if (stored && !autoSubmitted.current) {
+        autoSubmitted.current = true;
+        submitAccess(stored, { fromStored: true });
+      }
     } else {
       stopWebScanner();
     }
@@ -95,14 +162,25 @@ export default function AyudantesScan() {
     submitAccess(data);
   };
 
-  const submitAccess = async (token: string) => {
-    const extractedToken = extractReaderToken(token);
+  const resolveToken = (raw: string) => {
+    const extracted = extractReaderToken(raw);
+    if (extracted) {
+      saveSessionToken(extracted);
+      return extracted;
+    }
+    const stored = getSessionToken();
+    if (stored) return stored;
+    return '';
+  };
+
+  const submitAccess = async (token: string, opts?: { fromStored?: boolean }) => {
+    const finalToken = resolveToken(token || pendingToken);
     if (!name || !surname || !email) {
       Alert.alert('Datos incompletos', 'Completa nombre, apellido y correo antes de escanear.');
       return;
     }
 
-    if (!extractedToken) {
+    if (!finalToken) {
       Alert.alert('QR vacío', 'No se recibió un token de QR.');
       return;
     }
@@ -114,7 +192,7 @@ export default function AyudantesScan() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: extractedToken,
+          token: finalToken,
           nombre: name.trim(),
           apellido: surname.trim(),
           email: email.trim()
@@ -132,6 +210,9 @@ export default function AyudantesScan() {
     } finally {
       setLoading(false);
       setScanning(true);
+      if (!opts?.fromStored) {
+        autoSubmitted.current = false;
+      }
     }
   };
 
