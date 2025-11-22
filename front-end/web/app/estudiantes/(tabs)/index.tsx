@@ -24,7 +24,7 @@ type AccessResult = {
 const STORAGE_KEY = 'scanner_user_estudiante';
 const TOKEN_STORAGE_KEY = 'reader_token_session';
 const TOKEN_TTL_MS = 55000;
-const DUPLICATE_WINDOW_MS = 3000;
+const DUPLICATE_WINDOW_MS = 30000; // 30 segundos de cooldown
 
 const extractReaderToken = (raw: string) => {
   if (!raw) return '';
@@ -43,7 +43,8 @@ const extractReaderToken = (raw: string) => {
       return match[1];
     }
   }
-  return raw.trim();
+  // Si no se encontró un token válido, retornar cadena vacía en lugar de la URL completa
+  return '';
 };
 
 const saveSessionToken = (token: string) => {
@@ -93,6 +94,8 @@ export default function EstudiantesScan() {
   const lastTokenRef = useRef<{ token: string; ts: number }>({ token: '', ts: 0 });
   const toastTimeout = useRef<NodeJS.Timeout | null>(null);
   const [toast, setToast] = useState<{ text: string; detail?: string; variant: 'entrada' | 'salida' | 'error' | 'timbre' } | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const cooldownInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isWeb) {
@@ -111,8 +114,27 @@ export default function EstudiantesScan() {
     return () => {
       stopWebScanner();
       if (toastTimeout.current) clearTimeout(toastTimeout.current);
+      if (cooldownInterval.current) clearInterval(cooldownInterval.current);
     };
   }, [isWeb]);
+
+  // Manejo del cooldown countdown
+  useEffect(() => {
+    if (cooldownRemaining > 0) {
+      cooldownInterval.current = setInterval(() => {
+        setCooldownRemaining((prev) => {
+          if (prev <= 1) {
+            if (cooldownInterval.current) clearInterval(cooldownInterval.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (cooldownInterval.current) clearInterval(cooldownInterval.current);
+    };
+  }, [cooldownRemaining > 0]);
 
   useEffect(() => {
     if (isWeb && step === 'scan') {
@@ -146,6 +168,8 @@ export default function EstudiantesScan() {
   };
 
   const handleBarCodeScanned = async ({ data }: BarCodeScannerResult) => {
+    // No procesar si estamos en cooldown
+    if (cooldownRemaining > 0) return;
     setScanning(false);
     if (!data) return;
     await persistUser();
@@ -174,11 +198,16 @@ export default function EstudiantesScan() {
       return;
     }
 
-    // Evitar reenvíos rápidos del mismo token
+    // Verificar cooldown - bloquear escaneos durante el período de cooldown
     const now = Date.now();
-    if (finalToken === lastTokenRef.current.token && now - lastTokenRef.current.ts < DUPLICATE_WINDOW_MS) {
+    const timeSinceLastScan = now - lastTokenRef.current.ts;
+    if (lastTokenRef.current.token && timeSinceLastScan < DUPLICATE_WINDOW_MS) {
+      const remainingSeconds = Math.ceil((DUPLICATE_WINDOW_MS - timeSinceLastScan) / 1000);
+      setCooldownRemaining(remainingSeconds);
       return;
     }
+
+    // Actualizar el timestamp del último escaneo
     lastTokenRef.current = { token: finalToken, ts: now };
 
     setLoading(true);
@@ -220,12 +249,15 @@ export default function EstudiantesScan() {
       if (!response.ok) {
         const message = result?.error || 'No se pudo registrar el acceso';
         Alert.alert('Acceso denegado', message);
+      } else if (result?.success) {
+        // Si el escaneo fue exitoso, iniciar el cooldown
+        setCooldownRemaining(Math.ceil(DUPLICATE_WINDOW_MS / 1000));
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo contactar al servidor');
     } finally {
       setLoading(false);
-      setScanning(true);
+      // NO re-habilitar el scanner automáticamente para evitar bucles
       if (!opts?.fromStored) {
         autoSubmitted.current = false;
       }
@@ -267,6 +299,8 @@ export default function EstudiantesScan() {
         const detector = new BarcodeDetector({ formats: ['qr_code'] });
         scanInterval.current = setInterval(async () => {
           if (!videoRef.current) return;
+          // No procesar si estamos en cooldown
+          if (cooldownRemaining > 0) return;
           try {
             const codes = await detector.detect(videoRef.current);
             if (codes && codes.length > 0) {
@@ -288,6 +322,8 @@ export default function EstudiantesScan() {
           videoRef.current as any,
           (result, err) => {
             if (result?.getText()) {
+              // No procesar si estamos en cooldown
+              if (cooldownRemaining > 0) return;
               stopWebScanner();
               submitAccess(result.getText());
             }
@@ -349,6 +385,14 @@ export default function EstudiantesScan() {
           ? 'Portal Estudiantes: valida tus credenciales con el código mostrado por el lector.'
           : 'Apunta la cámara al QR. Los datos ingresados se guardan para próximos accesos.'}
       </Text>
+
+      {cooldownRemaining > 0 && step === 'scan' && (
+        <View style={styles.cooldownBanner}>
+          <Text style={styles.cooldownText}>
+            Espera {cooldownRemaining} segundo{cooldownRemaining !== 1 ? 's' : ''} antes de escanear de nuevo
+          </Text>
+        </View>
+      )}
 
       {step === 'form' ? (
         <View style={styles.form}>
@@ -561,25 +605,27 @@ const styles = StyleSheet.create({
     top: 16,
     left: 20,
     right: 20,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    elevation: 10,
     zIndex: 10
   },
   toastText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700'
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center'
   },
   toastDetail: {
     color: '#e5e7eb',
-    marginTop: 2,
-    fontSize: 13
+    marginTop: 4,
+    fontSize: 18,
+    textAlign: 'center'
   },
   toast_entrada: { backgroundColor: '#16a34a' },
   toast_salida: { backgroundColor: '#0ea5e9' },
@@ -606,5 +652,18 @@ const styles = StyleSheet.create({
     color: '#fca5a5',
     fontSize: 16,
     fontWeight: '600'
+  },
+  cooldownBanner: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginVertical: 8
+  },
+  cooldownText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center'
   }
 });
