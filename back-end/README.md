@@ -22,7 +22,9 @@ Werkzeug==2.3.7
 
 ## Environment variables
 
-- `JWT_SECRET` – secret key for JWT tokens.
+- `JWT_SECRET` – secret key for JWT tokens (user authentication).
+- `READER_QR_SECRET` – secret key for validating JWT tokens from generador-qr (dynamic QR scanner). **Must match generador-qr project**.
+- `READER_STATION_ID` – identifier for the QR reader station (default: `lector-web`).
 - `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB`, `MYSQL_PORT` – MySQL connection settings.
 - `DB_CHARSET` – charset for the database (default `utf8mb4`).
 
@@ -54,9 +56,25 @@ docker run -p 5000:5000 horarios-web
 
 Endpoints are grouped in blueprints. Some notable routes are:
 
+### Authentication & User Management
 - `POST /api/ayudantes/register` – register an administrator.
-- `GET /registros`, `GET /registros_hoy` – obtain records.
 - `GET /usuarios` – list allowed users.
+
+### QR Scanning & Validation
+- `POST /api/lector/validar` – **Main endpoint** - validates JWT token from generador-qr and registers access.
+  ```json
+  {
+    "token": "eyJhbGc...",  // JWT from generador-qr
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "email": "juan@uai.cl"
+  }
+  ```
+- `POST /api/qr/validate` – validates student QR codes (legacy).
+- ~~`POST /api/qr/generate`~~ – **REMOVED** (obsolete, was used for individual QR generation).
+
+### Records & Status
+- `GET /registros`, `GET /registros_hoy` – obtain access records.
 - `GET /cumplimiento` – fetch compliance status.
 - `GET /horas_acumuladas` – total hours worked.
 - `GET /estado_usuarios` – status of all users.

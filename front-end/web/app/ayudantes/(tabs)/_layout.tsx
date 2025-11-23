@@ -65,8 +65,8 @@ export default function AyudantesTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Generador QR",
-          tabBarLabel: "Generador",
+          title: "Lector QR",
+          tabBarLabel: "Lector",
         }}
       />
       <Tabs.Screen

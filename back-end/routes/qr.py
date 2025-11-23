@@ -99,45 +99,6 @@ def validate_qr():
     except Exception as e:
         return handle_error(e, "Error al validar código QR")
 
-@qr_bp.route('/qr/generate', methods=['POST'])
-def generate_qr_data():
-    """Genera datos para un código QR (usado internamente)"""
-    try:
-        data = request.get_json()
-
-        required_fields = ['name', 'surname', 'email']
-        missing_fields = [field for field in required_fields if not data.get(field)]
-
-        if missing_fields:
-            return jsonify({
-                'error': f'Faltan campos requeridos: {", ".join(missing_fields)}'
-            }), 400
-
-        if not validate_email(data['email']):
-            return jsonify({'error': 'Email inválido'}), 400
-
-        # Generar datos del QR
-        qr_data = {
-            'name': data['name'].strip(),
-            'surname': data['surname'].strip(),
-            'email': data['email'].strip().lower(),
-            'timestamp': int(datetime.now().timestamp() * 1000),
-            'tipoUsuario': 'ESTUDIANTE',
-            'status': 'VALID'
-        }
-
-        # Agregar auto-renovación si se especifica
-        if data.get('autoRenewal', False):
-            qr_data['autoRenewal'] = True
-
-        return format_response({
-            'qr_data': json.dumps(qr_data),
-            'expires_at': datetime.now() + timedelta(seconds=15) if not data.get('autoRenewal') else None
-        })
-
-    except Exception as e:
-        return handle_error(e, "Error al generar datos QR")
-
 @qr_bp.route('/qr/status/<email>', methods=['GET'])
 def get_qr_status(email):
     """Obtiene el estado actual de un estudiante para QR"""

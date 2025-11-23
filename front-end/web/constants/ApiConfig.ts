@@ -51,8 +51,7 @@ export const API_ENDPOINTS = {
   // QR code endpoints
   QR: {
     BASE: `${API_BASE_URL}/qr`,
-    VALIDATE: `${API_BASE_URL}/qr/validate`,
-    GENERATE: `${API_BASE_URL}/qr/generate`
+    VALIDATE: `${API_BASE_URL}/qr/validate`
   },
 
   // Lector QR dinámico

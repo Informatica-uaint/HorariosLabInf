@@ -109,7 +109,5 @@ volumes:
 networks:
   horarios_network_prod:
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: horarios_prod
   newt-proxy:
     external: true
