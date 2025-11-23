@@ -112,17 +112,40 @@ def add_registro():
                 tipo = 'Entrada'
                 nuevo_estado = 'dentro'
             
-            # Insertar registro
-            query = """
-                INSERT INTO registros 
-                (fecha, hora, dia, nombre, apellido, email, tipo, timestamp) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (
-                fecha, hora, dia,
-                data['nombre'], data['apellido'], email,
-                tipo, timestamp
-            ))
+            # Determinar tipo de usuario (ayudante vs estudiante)
+            cursor.execute("SELECT id FROM usuarios_ayudantes WHERE email = %s", (email,))
+            is_assistant = cursor.fetchone() is not None
+
+            cursor.execute("SELECT id FROM usuarios_estudiantes WHERE email = %s", (email,))
+            is_student = cursor.fetchone() is not None
+
+            # Insertar en la tabla correcta según el tipo de usuario
+            if is_assistant:
+                # Insertar en tabla de ayudantes (registros)
+                query = """
+                    INSERT INTO registros
+                    (fecha, hora, dia, nombre, apellido, email, tipo, auto_generado)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                """
+                cursor.execute(query, (
+                    fecha, hora, dia,
+                    data['nombre'], data['apellido'], email, tipo
+                ))
+            elif is_student:
+                # Insertar en tabla de estudiantes (EST_registros)
+                query = """
+                    INSERT INTO EST_registros
+                    (fecha, hora, dia, nombre, apellido, email, tipo, auto_generado)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                """
+                cursor.execute(query, (
+                    fecha, hora, dia,
+                    data['nombre'], data['apellido'], email, tipo
+                ))
+            else:
+                # Usuario no encontrado en ninguna tabla
+                conn.close()
+                return jsonify({"error": "Usuario no autorizado", "reason": "not_found"}), 403
             
             # Actualizar el estado del usuario
             cursor.execute("""

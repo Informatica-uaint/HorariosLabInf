@@ -38,6 +38,7 @@ def validar_token_lector():
 
     station_id = payload.get('station_id', READER_STATION_ID)
     nonce = payload.get('nonce')
+    user_type = ''  # Inicializar para uso posterior en door_control
 
     try:
         conn = get_connection()
@@ -57,12 +58,42 @@ def validar_token_lector():
                 tipo = 'Entrada'
                 nuevo_estado = 'dentro'
 
-            cursor.execute("""
-                INSERT INTO registros (fecha, hora, dia, nombre, apellido, email, tipo, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                fecha, hora, dia, nombre, apellido, email, tipo, now
-            ))
+            # Determinar tipo de usuario (ayudante vs estudiante)
+            cursor.execute("SELECT id FROM usuarios_ayudantes WHERE email = %s", (email,))
+            is_assistant = cursor.fetchone() is not None
+
+            cursor.execute("SELECT id FROM usuarios_estudiantes WHERE email = %s", (email,))
+            is_student = cursor.fetchone() is not None
+
+            # Guardar tipo de usuario para control de puerta
+            if is_assistant:
+                user_type = 'AYUDANTE'
+            elif is_student:
+                user_type = 'ESTUDIANTE'
+            else:
+                user_type = ''
+
+            # Insertar en la tabla correcta según el tipo de usuario
+            if is_assistant:
+                # Insertar en tabla de ayudantes (registros)
+                cursor.execute("""
+                    INSERT INTO registros (fecha, hora, dia, nombre, apellido, email, tipo, auto_generado)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                """, (
+                    fecha, hora, dia, nombre, apellido, email, tipo
+                ))
+            elif is_student:
+                # Insertar en tabla de estudiantes (EST_registros)
+                cursor.execute("""
+                    INSERT INTO EST_registros (fecha, hora, dia, nombre, apellido, email, tipo, auto_generado)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0)
+                """, (
+                    fecha, hora, dia, nombre, apellido, email, tipo
+                ))
+            else:
+                # Usuario no encontrado en ninguna tabla
+                conn.close()
+                return jsonify({"error": "Usuario no autorizado", "reason": "not_found"}), 403
 
             cursor.execute("""
                 INSERT INTO estado_usuarios (email, nombre, apellido, estado, ultima_entrada, ultima_salida)
@@ -97,10 +128,19 @@ def validar_token_lector():
         print(f"Error en validar_token_lector: {str(exc)}")
         return jsonify({"error": "Error interno", "detail": str(exc)}), 500
 
-    # Intentar apertura de puerta (best-effort)
+    # Intentar apertura de puerta según tipo de usuario
+    door_result = None
     try:
-        open_door_if_authorized(email, data.get('tipoUsuario') or data.get('tipo') or '')
+        door_result = open_door_if_authorized(email, user_type)
+        # Agregar información de la puerta a la respuesta
+        response['door_opened'] = door_result.get('opened', False)
+        response['door_authorized'] = door_result.get('authorized', False)
+        response['door_message'] = door_result.get('message', '')
+        if door_result.get('assistants_count') is not None:
+            response['assistants_inside'] = door_result.get('assistants_count')
     except Exception as e:
-        print(f"No se pudo abrir la puerta: {e}")
+        print(f"Error al procesar apertura de puerta: {e}")
+        response['door_opened'] = False
+        response['door_message'] = f"Error: {str(e)}"
 
     return jsonify(response)
