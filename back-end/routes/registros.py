@@ -113,7 +113,7 @@ def add_registro():
                 nuevo_estado = 'dentro'
             
             # Determinar tipo de usuario (ayudante vs estudiante)
-            cursor.execute("SELECT id FROM usuarios_ayudantes WHERE email = %s", (email,))
+            cursor.execute("SELECT id FROM usuarios_permitidos WHERE email = %s AND TP = 'AYUDANTE'", (email,))
             is_assistant = cursor.fetchone() is not None
 
             cursor.execute("SELECT id FROM usuarios_estudiantes WHERE email = %s", (email,))
