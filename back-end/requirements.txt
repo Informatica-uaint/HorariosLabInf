@@ -1,13 +1,13 @@
 # Flask y extensiones
 Flask==2.3.3
-flask-cors==4.0.0
+flask-cors==6.0.0
 
 # Base de datos
-PyMySQL==1.1.0
+PyMySQL==1.1.1
 
 # Autenticación y seguridad
 PyJWT==2.8.0
-cryptography==42.0.5
+cryptography==44.0.1
 
 # Manejo de fechas y timezone
 pytz==2023.3
@@ -16,14 +16,14 @@ pytz==2023.3
 APScheduler==3.10.4
 
 # Cliente HTTP para tareas programadas
-requests==2.31.0
+requests==2.32.4
 
 # Variables de entorno
 python-dotenv==1.0.0
 
 # Servidor WSGI para producción
-gunicorn==21.2.0
+gunicorn==22.0.0
 
 # Utilidades
-Werkzeug==2.3.7
+Werkzeug==3.0.6
 aioesphomeapi==24.0.0
