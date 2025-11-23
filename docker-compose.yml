@@ -41,6 +41,10 @@ services:
       LOG_LEVEL: INFO
       CORS_ORIGINS: "*"
       USE_SSL: "false"
+      # ESPHome Configuration (Door Control)
+      ESPHOME_URL: ${ESPHOME_URL}
+      ESPHOME_TOKEN: ${ESPHOME_TOKEN}
+      ESPHOME_DOOR_ENTITY_ID: ${ESPHOME_DOOR_ENTITY_ID}
     ports:
       - "5001:5000"
     volumes:

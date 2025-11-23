@@ -44,6 +44,11 @@ services:
       MYSQL_DB: ${MYSQL_DATABASE}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
 
+      # ESPHome Configuration (Door Control)
+      ESPHOME_URL: ${ESPHOME_URL}
+      ESPHOME_TOKEN: ${ESPHOME_TOKEN}
+      ESPHOME_DOOR_ENTITY_ID: ${ESPHOME_DOOR_ENTITY_ID}
+
       # Security configuration
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET: ${JWT_SECRET}

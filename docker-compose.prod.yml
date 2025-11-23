@@ -44,6 +44,11 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET: ${JWT_SECRET}
 
+      # ESPHome Configuration (Door Control)
+      ESPHOME_URL: ${ESPHOME_URL}
+      ESPHOME_TOKEN: ${ESPHOME_TOKEN}
+      ESPHOME_DOOR_ENTITY_ID: ${ESPHOME_DOOR_ENTITY_ID}
+
       # Application configuration
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS}
