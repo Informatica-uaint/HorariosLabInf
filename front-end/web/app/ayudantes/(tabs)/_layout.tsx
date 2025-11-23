@@ -34,6 +34,8 @@ export default function AyudantesTabLayout() {
             iconName = 'time-outline';
           } else if (route.name === 'ayudantes') {
             iconName = 'people-outline';
+          } else if (route.name === 'estudiantes') {
+            iconName = 'school-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -95,6 +97,13 @@ export default function AyudantesTabLayout() {
         options={{
           title: "Ayudantes",
           tabBarLabel: "Ayudantes",
+        }}
+      />
+      <Tabs.Screen
+        name="estudiantes"
+        options={{
+          title: "Estudiantes",
+          tabBarLabel: "Estuds.",
         }}
       />
     </Tabs>
