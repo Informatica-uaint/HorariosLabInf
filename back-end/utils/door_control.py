@@ -1,65 +1,9 @@
-import asyncio
-import threading
-from aioesphomeapi import APIClient, ButtonInfo
+import subprocess
+import sys
+import os
+from pathlib import Path
 from config import Config
 from database import get_connection
-
-
-async def _press_button(host, port, device_name, api_key, button_name='abrir'):
-    """
-    Presiona un botón en ESPHome.
-    Lógica copiada del script de prueba que funciona.
-    """
-    client = APIClient(host, port, device_name, noise_psk=api_key)
-    await client.connect(login=True)
-
-    entities, _ = await client.list_entities_services()
-    target = None
-    for ent in entities:
-        # Búsqueda simplificada (igual que el script que funciona)
-        if ent.name and ent.name.lower() == button_name.lower():
-            target = ent
-            break
-
-    if not target:
-        await client.disconnect()
-        raise RuntimeError(f"❌ No se encontró el botón '{button_name}'")
-
-    print(f"✅ Botón encontrado: {target}")
-    # Llamar sin await (como en el script que funciona)
-    client.button_command(target.key)
-    await asyncio.sleep(0.5)
-    await client.disconnect()
-
-
-def _run_async_in_thread(coro):
-    """
-    Ejecuta una corutina en un thread separado con su propio event loop.
-    Necesario porque Flask puede tener su propio loop y asyncio.run() causa deadlock.
-    """
-    result = {'success': False, 'error': None}
-
-    def run_in_thread():
-        try:
-            # Crear nuevo event loop para este thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(coro)
-            result['success'] = True
-        except Exception as e:
-            result['error'] = str(e)
-        finally:
-            loop.close()
-
-    thread = threading.Thread(target=run_in_thread)
-    thread.start()
-    thread.join(timeout=35)  # Timeout de 35 segundos
-
-    if thread.is_alive():
-        result['error'] = "Timeout: La operación tardó más de 35 segundos"
-        return result
-
-    return result
 
 
 def open_door_if_authorized(user_email: str, user_type: str):
@@ -139,27 +83,34 @@ def open_door_if_authorized(user_email: str, user_type: str):
     door_opened = False
     if authorized:
         try:
-            print("🔓 Intentando abrir puerta con ESPHome...")
-            # Ejecutar en thread separado para evitar conflictos con event loop de Flask
-            result = _run_async_in_thread(
-                _press_button(
-                    Config.DOOR_HOST,
-                    Config.DOOR_PORT,
-                    Config.DOOR_DEVICE_NAME,
-                    Config.DOOR_API_KEY
-                )
+            print("🔓 Ejecutando script de apertura de puerta...")
+
+            # Ejecutar script standalone que está probado y funciona
+            script_path = Path(__file__).parent / 'open_door.py'
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=10  # Timeout de 10 segundos
             )
 
-            if result['success']:
+            if result.returncode == 0:
                 door_opened = True
-                print("✅ Puerta abierta exitosamente")
+                print(f"✅ Puerta abierta exitosamente")
+                print(f"   Output: {result.stdout.strip()}")
             else:
                 door_opened = False
-                message = f"Error al abrir puerta: {result['error']}"
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                message = f"Error al abrir puerta: {error_msg}"
                 print(f"❌ {message}")
-        except Exception as e:
-            message = f"Error al abrir puerta: {str(e)}"
+
+        except subprocess.TimeoutExpired:
             door_opened = False
+            message = "Error al abrir puerta: Timeout después de 10 segundos"
+            print(f"❌ {message}")
+        except Exception as e:
+            door_opened = False
+            message = f"Error al abrir puerta: {str(e)}"
             print(f"❌ Excepción: {message}")
 
     return {
