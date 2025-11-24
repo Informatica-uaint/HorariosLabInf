@@ -33,8 +33,13 @@ def open_door_if_authorized(user_email: str, user_type: str):
     Returns:
         dict: {"opened": bool, "authorized": bool, "message": str, "assistants_count": int}
     """
+    # Debug: Mostrar valores de configuración
+    print(f"🔧 DEBUG Config: DOOR_HOST={Config.DOOR_HOST}, DOOR_PORT={Config.DOOR_PORT}")
+    print(f"🔧 DEBUG Config: DOOR_DEVICE_NAME={Config.DOOR_DEVICE_NAME}, DOOR_API_KEY={'SET' if Config.DOOR_API_KEY else 'NOT SET'}")
+
     if not Config.DOOR_HOST or not Config.DOOR_API_KEY:
         # Config incompleta, pero no lanzar excepción - solo retornar que no se abrió
+        print(f"⚠️  Config incompleta: DOOR_HOST={Config.DOOR_HOST is not None}, DOOR_API_KEY={Config.DOOR_API_KEY is not None}")
         return {
             "opened": False,
             "authorized": False,
