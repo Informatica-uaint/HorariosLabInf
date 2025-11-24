@@ -17,7 +17,7 @@ async def _press_button(host, port, device_name, api_key, button_name='abrir'):
         await client.disconnect()
         raise RuntimeError(f"No se encontró el botón '{button_name}'")
     # Ejecutar comando
-    await client.button_command(target.key)
+    client.button_command(target.key)
     await asyncio.sleep(0.5)
     await client.disconnect()
 

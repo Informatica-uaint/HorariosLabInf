@@ -19,7 +19,7 @@ def get_cumplimiento():
             hora_actual = now.strftime('%H:%M:%S')
             fecha_actual = now.strftime('%Y-%m-%d')
 
-            print(f"[DEBUG] Iniciando cálculo de cumplimiento. Fecha: {fecha_actual}, Día: {dia_actual_esp}")
+            #print(f"[DEBUG] Iniciando cálculo de cumplimiento. Fecha: {fecha_actual}, Día: {dia_actual_esp}")
 
             # Traer usuarios activos
             cursor.execute("SELECT * FROM usuarios_permitidos WHERE activo = 1")
@@ -32,7 +32,7 @@ def get_cumplimiento():
             start_of_week_str = start_of_week.strftime('%Y-%m-%d')
 
             for user in usuarios:
-                print(f"[DEBUG] Procesando usuario: {user['nombre']} {user['apellido']} ({user['email']})")
+                #print(f"[DEBUG] Procesando usuario: {user['nombre']} {user['apellido']} ({user['email']})")
                 
                 # Traer sus horarios asignados
                 cursor.execute(
@@ -62,7 +62,7 @@ def get_cumplimiento():
 
                 # Un bloque por cada horario
                 for h in horarios:
-                    print(f"[DEBUG] Procesando bloque: {h['dia']} {h['hora_entrada']}-{h['hora_salida']}")
+                    #print(f"[DEBUG] Procesando bloque: {h['dia']} {h['hora_entrada']}-{h['hora_salida']}")
                     
                     bloque_label = f"{h['dia']} {h['hora_entrada']}-{h['hora_salida']}"
                     bloques.append(bloque_label)
@@ -78,7 +78,7 @@ def get_cumplimiento():
                     dia_horario = h['dia'].lower()
                     dia_en_espanol = Config.DIAS_TRADUCCION.get(dia_horario, dia_horario)
                     
-                    print(f"[DEBUG] Día actual: {dia_actual_esp}, Día del bloque: {dia_horario} / {dia_en_espanol}")
+                    #print(f"[DEBUG] Día actual: {dia_actual_esp}, Día del bloque: {dia_horario} / {dia_en_espanol}")
 
                     if dia_en_espanol == dia_actual_esp:
                         cursor.execute("""
@@ -96,7 +96,7 @@ def get_cumplimiento():
                         """, (user['email'], dia_en_espanol, dia_horario, start_of_week_str, fecha_actual))
 
                     registros_del_dia = cursor.fetchall()
-                    print(f"[DEBUG] Registros encontrados para el día: {len(registros_del_dia)}")
+                    #print(f"[DEBUG] Registros encontrados para el día: {len(registros_del_dia)}")
 
                     # Revisar registros de entrada y salida para determinar estado del bloque
                     cumplio_bloque = False
@@ -106,36 +106,36 @@ def get_cumplimiento():
                     entradas = [r for r in registros_del_dia if r['tipo'] == 'Entrada']
                     salidas = [r for r in registros_del_dia if r['tipo'] == 'Salida']
                     
-                    print(f"[DEBUG] Entradas: {len(entradas)}, Salidas: {len(salidas)}")
+                    #print(f"[DEBUG] Entradas: {len(entradas)}, Salidas: {len(salidas)}")
                     
                     # Verificar si hay al menos una entrada y una salida
                     if entradas and salidas:
                         for entrada in entradas:
                             t_entrada = convert_to_time(entrada['hora'])
                             
-                            print(f"[DEBUG] Procesando entrada id:{entrada['id']} hora:{t_entrada}")
+                            #print(f"[DEBUG] Procesando entrada id:{entrada['id']} hora:{t_entrada}")
                             
                             for salida in salidas:
                                 # Solo considerar salidas posteriores a esta entrada
                                 if salida['id'] > entrada['id']:
                                     t_salida = convert_to_time(salida['hora'])
                                     
-                                    print(f"[DEBUG] Comparando con salida id:{salida['id']} hora:{t_salida}")
+                                    #print(f"[DEBUG] Comparando con salida id:{salida['id']} hora:{t_salida}")
                                     
                                     # Verificar si cumplió el bloque completo
                                     if (t_entrada <= hora_entrada_dt and t_salida >= hora_salida_dt):
                                         cumplio_bloque = True
-                                        print(f"[DEBUG] CUMPLIDO! Entrada a tiempo/antes y salida a tiempo/después")
+                                        #print(f"[DEBUG] CUMPLIDO! Entrada a tiempo/antes y salida a tiempo/después")
                                         break
                                     elif (t_entrada > hora_entrada_dt and t_entrada < hora_salida_dt and t_salida >= hora_salida_dt):
                                         incompleto_bloque = True
-                                        print(f"[DEBUG] INCOMPLETO - Entrada tarde, salida a tiempo/después")
+                                        #print(f"[DEBUG] INCOMPLETO - Entrada tarde, salida a tiempo/después")
                                     elif (t_entrada <= hora_entrada_dt and t_salida < hora_salida_dt):
                                         incompleto_bloque = True
-                                        print(f"[DEBUG] INCOMPLETO - Entrada a tiempo/antes, salida temprana")
+                                        #print(f"[DEBUG] INCOMPLETO - Entrada a tiempo/antes, salida temprana")
                                     elif (t_entrada < hora_salida_dt and t_salida > hora_entrada_dt):
                                         incompleto_bloque = True
-                                        print(f"[DEBUG] INCOMPLETO - Presencia parcial en el bloque")
+                                        #print(f"[DEBUG] INCOMPLETO - Presencia parcial en el bloque")
                             
                             if cumplio_bloque:
                                 break
@@ -171,7 +171,7 @@ def get_cumplimiento():
                             bloque_estado = "Ausente"
                             ausentes += 1
 
-                    print(f"[DEBUG] Estado bloque: {bloque_estado} (Cumplido: {cumplio_bloque}, Incompleto: {incompleto_bloque})")
+                    #print(f"[DEBUG] Estado bloque: {bloque_estado} (Cumplido: {cumplio_bloque}, Incompleto: {incompleto_bloque})")
                     
                     bloques_info.append({
                         "bloque": bloque_label,
@@ -179,7 +179,7 @@ def get_cumplimiento():
                     })
 
                 # Estado general del usuario para la semana
-                print(f"[DEBUG] Usuario {user['email']} - Cumplidos: {cumplidos}, Incompletos: {incompletos}, Ausentes: {ausentes}, Pendientes: {pendientes}")
+                #print(f"[DEBUG] Usuario {user['email']} - Cumplidos: {cumplidos}, Incompletos: {incompletos}, Ausentes: {ausentes}, Pendientes: {pendientes}")
                 
                 if len(horarios) == 0:
                     estado_usuario = "No Aplica"
@@ -194,7 +194,7 @@ def get_cumplimiento():
                 else:
                     estado_usuario = "No Cumple"
                 
-                print(f"[DEBUG] Estado final usuario: {estado_usuario}")
+                #print(f"[DEBUG] Estado final usuario: {estado_usuario}")
 
                 resultado.append({
                     "nombre": user['nombre'],

@@ -129,9 +129,11 @@ def validar_token_lector():
         return jsonify({"error": "Error interno", "detail": str(exc)}), 500
 
     # Intentar apertura de puerta según tipo de usuario
+    print(f"🚪 DEBUG: Intentando abrir puerta - user_type='{user_type}', email='{email}'")
     door_result = None
     try:
         door_result = open_door_if_authorized(email, user_type)
+        print(f"🚪 DEBUG: Resultado door_control: {door_result}")
         # Agregar información de la puerta a la respuesta
         response['door_opened'] = door_result.get('opened', False)
         response['door_authorized'] = door_result.get('authorized', False)
