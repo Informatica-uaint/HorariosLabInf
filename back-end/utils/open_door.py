@@ -2,26 +2,22 @@
 """
 Script standalone para abrir la puerta vía ESPHome.
 Este script ha sido probado y funciona correctamente.
+
+Usage: python open_door.py <host> <port> <device_name> <api_key>
 """
 import asyncio
 import sys
 from aioesphomeapi import APIClient
-from config import Config
 
-async def main():
+async def main(host, port, device_name, api_key):
     """Conecta a ESPHome y presiona el botón 'abrir'"""
-    HOST = Config.DOOR_HOST
-    PORT = Config.DOOR_PORT
-    DEVICE_NAME = Config.DOOR_DEVICE_NAME
-    API_KEY = Config.DOOR_API_KEY
-
-    if not HOST or not API_KEY:
-        print("❌ Error: ESPHOME_HOST o ESPHOME_TOKEN no configurados", file=sys.stderr)
+    if not host or not api_key:
+        print("❌ Error: Host o API key no proporcionados", file=sys.stderr)
         sys.exit(1)
 
     try:
-        print(f"🔌 Conectando a ESPHome: {HOST}:{PORT} (device: {DEVICE_NAME})")
-        client = APIClient(HOST, PORT, DEVICE_NAME, noise_psk=API_KEY)
+        print(f"🔌 Conectando a ESPHome: {host}:{port} (device: {device_name})")
+        client = APIClient(host, port, device_name, noise_psk=api_key)
         await client.connect(login=True)
         print("✅ Conectado a ESPHome")
 
@@ -56,4 +52,13 @@ async def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if len(sys.argv) != 5:
+        print("Usage: python open_door.py <host> <port> <device_name> <api_key>", file=sys.stderr)
+        sys.exit(1)
+
+    host = sys.argv[1]
+    port = int(sys.argv[2])
+    device_name = sys.argv[3]
+    api_key = sys.argv[4]
+
+    asyncio.run(main(host, port, device_name, api_key))

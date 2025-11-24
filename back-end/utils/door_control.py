@@ -88,7 +88,14 @@ def open_door_if_authorized(user_email: str, user_type: str):
             # Ejecutar script standalone que está probado y funciona
             script_path = Path(__file__).parent / 'open_door.py'
             result = subprocess.run(
-                [sys.executable, str(script_path)],
+                [
+                    sys.executable,
+                    str(script_path),
+                    Config.DOOR_HOST,
+                    str(Config.DOOR_PORT),
+                    Config.DOOR_DEVICE_NAME,
+                    Config.DOOR_API_KEY
+                ],
                 capture_output=True,
                 text=True,
                 timeout=10  # Timeout de 10 segundos
