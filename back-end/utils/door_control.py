@@ -5,18 +5,27 @@ from database import get_connection
 
 
 async def _press_button(host, port, device_name, api_key, button_name='abrir'):
+    """
+    Presiona un botón en ESPHome.
+    Lógica copiada del script de prueba que funciona.
+    """
     client = APIClient(host, port, device_name, noise_psk=api_key)
     await client.connect(login=True)
+
     entities, _ = await client.list_entities_services()
     target = None
     for ent in entities:
-        if isinstance(ent, ButtonInfo) and ent.name and ent.name.lower() == button_name.lower():
+        # Búsqueda simplificada (igual que el script que funciona)
+        if ent.name and ent.name.lower() == button_name.lower():
             target = ent
             break
+
     if not target:
         await client.disconnect()
-        raise RuntimeError(f"No se encontró el botón '{button_name}'")
-    # Ejecutar comando
+        raise RuntimeError(f"❌ No se encontró el botón '{button_name}'")
+
+    print(f"✅ Botón encontrado: {target}")
+    # Llamar sin await (como en el script que funciona)
     client.button_command(target.key)
     await asyncio.sleep(0.5)
     await client.disconnect()

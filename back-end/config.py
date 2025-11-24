@@ -18,26 +18,11 @@ class Config:
     READER_QR_SECRET = os.getenv('READER_QR_SECRET')
     READER_STATION_ID = os.getenv('READER_STATION_ID', 'lector-web')
 
-    # Control de puerta (ESPHOME)
-    # Soportar tanto ESPHOME_URL como DOOR_HOST
-    _esphome_url = os.getenv('ESPHOME_URL')
-    if _esphome_url:
-        # Parsear URL: "http://esphome:6053" -> host="esphome", port=6053
-        import re
-        match = re.match(r'https?://([^:]+)(?::(\d+))?', _esphome_url)
-        if match:
-            DOOR_HOST = match.group(1)
-            DOOR_PORT = int(match.group(2)) if match.group(2) else 6053
-        else:
-            DOOR_HOST = _esphome_url
-            DOOR_PORT = 6053
-    else:
-        DOOR_HOST = os.getenv('DOOR_HOST')
-        DOOR_PORT = int(os.getenv('DOOR_PORT', 6053))
-
-    DOOR_DEVICE_NAME = os.getenv('DOOR_DEVICE_NAME', 'arturito')
-    # Soportar tanto ESPHOME_TOKEN como DOOR_API_KEY
-    DOOR_API_KEY = os.getenv('ESPHOME_TOKEN') or os.getenv('DOOR_API_KEY')
+    # Control de puerta (ESPHOME) - Configuración simplificada
+    DOOR_HOST = os.getenv('ESPHOME_HOST', '10.0.5.5')
+    DOOR_PORT = int(os.getenv('ESPHOME_PORT', '6053'))
+    DOOR_DEVICE_NAME = os.getenv('ESPHOME_DEVICE_NAME', 'arturito')
+    DOOR_API_KEY = os.getenv('ESPHOME_TOKEN')
 
     # Base de datos
     DB_HOST = os.getenv('MYSQL_HOST')
