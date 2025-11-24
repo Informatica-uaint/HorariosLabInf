@@ -86,13 +86,23 @@ def open_door_if_authorized(user_email: str, user_type: str):
             print("🔓 Ejecutando script de apertura de puerta...")
 
             # Ejecutar script standalone que está probado y funciona
-            # El script lee las variables de entorno directamente
+            # Pasar explícitamente las variables de entorno
             script_path = Path(__file__).parent / 'open_door.py'
+
+            # Preparar environment con variables necesarias
+            env = os.environ.copy()
+            env['ESPHOME_HOST'] = Config.DOOR_HOST
+            env['ESPHOME_PORT'] = str(Config.DOOR_PORT)
+            env['ESPHOME_DEVICE_NAME'] = Config.DOOR_DEVICE_NAME
+            if Config.DOOR_API_KEY:
+                env['ESPHOME_TOKEN'] = Config.DOOR_API_KEY
+
             result = subprocess.run(
                 [sys.executable, str(script_path)],
                 capture_output=True,
                 text=True,
-                timeout=10  # Timeout de 10 segundos
+                timeout=15,  # Aumentar timeout a 15 segundos
+                env=env
             )
 
             if result.returncode == 0:
@@ -104,10 +114,14 @@ def open_door_if_authorized(user_email: str, user_type: str):
                 error_msg = result.stderr.strip() or result.stdout.strip()
                 message = f"Error al abrir puerta: {error_msg}"
                 print(f"❌ {message}")
+                if result.stdout:
+                    print(f"   Stdout: {result.stdout.strip()}")
+                if result.stderr:
+                    print(f"   Stderr: {result.stderr.strip()}")
 
         except subprocess.TimeoutExpired:
             door_opened = False
-            message = "Error al abrir puerta: Timeout después de 10 segundos"
+            message = "Error al abrir puerta: Timeout después de 15 segundos"
             print(f"❌ {message}")
         except Exception as e:
             door_opened = False
