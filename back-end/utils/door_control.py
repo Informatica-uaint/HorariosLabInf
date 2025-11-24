@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from aioesphomeapi import APIClient, ButtonInfo
 from config import Config
 from database import get_connection
@@ -29,6 +30,36 @@ async def _press_button(host, port, device_name, api_key, button_name='abrir'):
     client.button_command(target.key)
     await asyncio.sleep(0.5)
     await client.disconnect()
+
+
+def _run_async_in_thread(coro):
+    """
+    Ejecuta una corutina en un thread separado con su propio event loop.
+    Necesario porque Flask puede tener su propio loop y asyncio.run() causa deadlock.
+    """
+    result = {'success': False, 'error': None}
+
+    def run_in_thread():
+        try:
+            # Crear nuevo event loop para este thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(coro)
+            result['success'] = True
+        except Exception as e:
+            result['error'] = str(e)
+        finally:
+            loop.close()
+
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    thread.join(timeout=35)  # Timeout de 35 segundos
+
+    if thread.is_alive():
+        result['error'] = "Timeout: La operación tardó más de 35 segundos"
+        return result
+
+    return result
 
 
 def open_door_if_authorized(user_email: str, user_type: str):
@@ -108,7 +139,9 @@ def open_door_if_authorized(user_email: str, user_type: str):
     door_opened = False
     if authorized:
         try:
-            asyncio.run(
+            print("🔓 Intentando abrir puerta con ESPHome...")
+            # Ejecutar en thread separado para evitar conflictos con event loop de Flask
+            result = _run_async_in_thread(
                 _press_button(
                     Config.DOOR_HOST,
                     Config.DOOR_PORT,
@@ -116,10 +149,18 @@ def open_door_if_authorized(user_email: str, user_type: str):
                     Config.DOOR_API_KEY
                 )
             )
-            door_opened = True
+
+            if result['success']:
+                door_opened = True
+                print("✅ Puerta abierta exitosamente")
+            else:
+                door_opened = False
+                message = f"Error al abrir puerta: {result['error']}"
+                print(f"❌ {message}")
         except Exception as e:
             message = f"Error al abrir puerta: {str(e)}"
             door_opened = False
+            print(f"❌ Excepción: {message}")
 
     return {
         "opened": door_opened,
